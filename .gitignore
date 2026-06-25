@@ -1,0 +1,6 @@
+node_modules/
+.env
+.env.*
+# Enthält echte Kontaktdaten aus ClickUp — niemals committen.
+clickup-import.json
+.DS_Store

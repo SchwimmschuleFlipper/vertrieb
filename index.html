@@ -1,0 +1,1770 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Flipper Vertrieb Board</title>
+<style>
+  :root {
+    --bg: #F1F2F4;
+    --surface: #FFFFFF;
+    --surface-hover: #F5F6F7;
+    --border: #E4E5E8;
+    --border-strong: #D5D7DC;
+    --text: #16181D;
+    --muted: #8A8F98;
+    --muted-2: #B4B8BF;
+
+    --accent: #2A9D8F;
+    --accent-hover: #248A7E;
+    --accent-soft: #E6F4F2;
+    --focus-ring: rgba(42,157,143,0.35);
+    --danger: #E5484D;
+
+    --shadow-drag: 0 8px 24px rgba(9,11,16,0.16);
+    --shadow-panel: 8px 0 24px rgba(9,11,16,0.06);
+
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0E0F12;
+      --surface: #16181D;
+      --surface-hover: #1C1F26;
+      --border: #23262D;
+      --border-strong: #2C2F38;
+      --text: #EDEEF0;
+      --muted: #8A8F98;
+      --muted-2: #565a63;
+      --accent-soft: #16302c;
+    }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  input, textarea, select { font-family: inherit; color: var(--text); }
+
+  /* ============ TOPBAR ============ */
+  .topbar {
+    height: 48px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+  }
+  .topbar .brand { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+  .topbar .save-status { font-size: 11px; color: var(--muted); margin-left: 12px; transition: color .15s; }
+  .topbar .save-status.flash { color: var(--accent); }
+  .topbar .spacer { flex: 1; }
+
+  .search-wrap { position: relative; }
+  .search-wrap svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  .search {
+    width: 220px; height: 32px;
+    background: var(--surface-hover);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 0 12px 0 32px;
+    font-size: 12.5px; color: var(--text);
+    outline: none;
+  }
+  .search::placeholder { color: var(--muted-2); }
+  .search:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
+
+  .btn-ghost {
+    height: 32px; border: 1px solid var(--border-strong); color: var(--text);
+    background: var(--surface); border-radius: 8px; padding: 0 12px;
+    font-size: 12.5px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;
+    transition: background .12s;
+  }
+  .btn-ghost:hover { background: var(--surface-hover); }
+  .btn-ghost .badge {
+    font-size: 10px; font-weight: 700; background: var(--accent); color: #fff;
+    border-radius: 999px; padding: 0 5px; min-width: 16px; text-align: center;
+  }
+
+  .btn-new {
+    height: 32px;
+    border: 1px solid var(--accent);
+    color: #fff; background: var(--accent);
+    border-radius: 8px;
+    padding: 0 14px;
+    font-size: 12.5px; font-weight: 600;
+    transition: background .12s;
+  }
+  .btn-new:hover { background: var(--accent-hover); }
+
+  .me {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: grid; place-items: center;
+    color: #fff; font-size: 11px; font-weight: 600;
+    user-select: none;
+  }
+
+  /* ============ BOARD ============ */
+  .board {
+    position: fixed; top: 48px; left: 0; right: 0; bottom: 0;
+    background: var(--bg);
+    overflow-x: auto; overflow-y: hidden;
+    padding: 16px 16px 14px;
+    display: flex; gap: 14px; align-items: stretch;
+  }
+  .board::-webkit-scrollbar { height: 10px; }
+  .board::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 5px; }
+  .board::-webkit-scrollbar-track { background: transparent; }
+
+  /* Jede Spalte = getöntes Panel, damit klar ist "das ist in der Spalte" */
+  .column {
+    --col: #8A8F98;
+    width: 290px; min-width: 290px;
+    display: flex; flex-direction: column;
+    background: color-mix(in srgb, var(--col) 8%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--col) 22%, var(--border));
+    border-radius: 12px;
+    max-height: 100%;
+    transition: box-shadow .12s, border-color .12s;
+  }
+  .column.drag-target { border-color: var(--col); box-shadow: 0 0 0 2px color-mix(in srgb, var(--col) 40%, transparent); }
+  .column.col-dragging { opacity: 0.5; }
+  .col-head {
+    position: sticky; top: 0; z-index: 2;
+    min-height: 44px;
+    padding: 9px 10px 9px;
+    display: flex; align-items: center; gap: 8px;
+    background: color-mix(in srgb, var(--col) 8%, var(--surface));
+    border-radius: 12px 12px 0 0;
+    cursor: grab;
+  }
+  .col-head:active { cursor: grabbing; }
+  .col-chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 4px 11px; border-radius: 7px; max-width: 200px;
+  }
+  .col-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .col-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.03em;
+    text-transform: uppercase; color: inherit;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .col-title-input {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+    border: none; background: rgba(255,255,255,0.6); outline: none; border-radius: 4px;
+    padding: 1px 4px; width: 150px; color: inherit;
+  }
+  .col-count {
+    font-size: 11px; font-weight: 700; opacity: 0.65;
+    font-variant-numeric: tabular-nums;
+  }
+  .col-final-tag {
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--muted); border: 1px solid var(--border-strong); border-radius: 4px;
+    padding: 0 4px; line-height: 14px;
+  }
+  .col-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+  .col-btn {
+    width: 22px; height: 22px; border-radius: 6px;
+    border: none; background: transparent; color: var(--muted);
+    display: grid; place-items: center; font-size: 15px; line-height: 1;
+    opacity: 0; transition: opacity .12s, background .12s;
+  }
+  .column:hover .col-btn { opacity: 1; }
+  .col-btn:hover { background: rgba(0,0,0,0.06); color: var(--text); }
+
+  .col-body {
+    overflow-y: auto; overflow-x: hidden;
+    padding: 4px 8px 12px;
+    display: flex; flex-direction: column; gap: 8px;
+    flex: 1;
+  }
+  .col-body::-webkit-scrollbar { width: 8px; }
+  .col-body::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+  .col-body::-webkit-scrollbar-track { background: transparent; }
+
+  /* Ghost-Spalte zum Hinzufügen */
+  .col-add-ghost {
+    width: 60px; min-width: 60px; align-self: stretch;
+    border: 1.5px dashed var(--border-strong); border-radius: 12px;
+    background: transparent; color: var(--muted);
+    display: flex; align-items: flex-start; justify-content: center; padding-top: 12px;
+    font-size: 22px; transition: background .12s, color .12s, border-color .12s;
+  }
+  .col-add-ghost:hover { background: var(--surface); color: var(--accent); border-color: var(--accent); }
+
+  /* ============ CARD ============ */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    padding: 10px 12px;
+    box-shadow: inset 3px 0 0 var(--status-color, var(--muted)), 0 1px 2px rgba(9,11,16,0.05);
+    cursor: pointer;
+    transition: background .08s ease, border-color .08s ease, transform .1s ease, box-shadow .1s ease;
+    user-select: none;
+  }
+  .card:hover {
+    border-color: var(--muted-2);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(9,11,16,0.10), inset 3px 0 0 var(--status-color, var(--muted));
+  }
+  .card.active {
+    border: 1.5px solid var(--accent);
+    background: color-mix(in srgb, var(--accent-soft) 40%, var(--surface));
+  }
+  .card.kbd-focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .card.dragging { opacity: 0.9; box-shadow: var(--shadow-drag), inset 3px 0 0 var(--status-color); }
+
+  /* Deadline überfällig: rot aufleuchten */
+  .card.overdue {
+    border-color: color-mix(in srgb, var(--danger) 50%, var(--border-strong));
+    background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+    box-shadow: inset 3px 0 0 var(--danger), 0 1px 2px rgba(9,11,16,0.05);
+    animation: overduePulse 2.2s ease-in-out infinite;
+  }
+  .card.overdue:hover { box-shadow: 0 4px 12px rgba(229,72,77,0.18), inset 3px 0 0 var(--danger); }
+  @keyframes overduePulse {
+    0%, 100% { box-shadow: inset 3px 0 0 var(--danger), 0 0 0 0 rgba(229,72,77,0); }
+    50% { box-shadow: inset 3px 0 0 var(--danger), 0 0 0 3px rgba(229,72,77,0.16); }
+  }
+
+  .card-row1 { display: flex; align-items: center; gap: 6px; }
+  .prio-icon { display: flex; align-items: flex-end; gap: 1.5px; height: 10px; flex-shrink: 0; }
+  .prio-icon span { width: 2.5px; border-radius: 1px; background: var(--muted-2); }
+  .prio-icon span.b1 { height: 4px; }
+  .prio-icon span.b2 { height: 7px; }
+  .prio-icon span.b3 { height: 10px; }
+  .card-title {
+    font-size: 13.5px; font-weight: 590; letter-spacing: -0.006em;
+    line-height: 1.3; flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .avatar {
+    border-radius: 50%; display: grid; place-items: center;
+    color: #fff; font-weight: 600; flex-shrink: 0; user-select: none;
+  }
+  .avatar.sm { width: 20px; height: 20px; font-size: 10px; }
+  .avatar.xs { width: 18px; height: 18px; font-size: 9px; }
+  .avatar.md { width: 22px; height: 22px; font-size: 10px; }
+
+  .card-row2 { display: flex; align-items: center; gap: 6px; margin-top: 4px; min-width: 0; }
+  .card-city { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill-cat {
+    font-size: 11px; background: var(--surface-hover); color: var(--muted);
+    border-radius: 4px; padding: 1px 6px; white-space: nowrap; flex-shrink: 0;
+  }
+  .card-row3 {
+    display: flex; align-items: center; gap: 8px; margin-top: 6px;
+    color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums;
+  }
+  .card-row3 .meta { display: flex; align-items: center; gap: 3px; }
+  .card-row3 .meta.due-over { color: var(--danger); font-weight: 600; }
+
+  .card-placeholder {
+    border: 1px dashed var(--border-strong);
+    border-radius: 8px;
+    background: rgba(0,0,0,0.04);
+  }
+  .col-empty {
+    font-size: 12px; color: var(--muted-2); text-align: center;
+    padding: 14px 0; border: 1px dashed color-mix(in srgb, var(--col) 28%, var(--border));
+    border-radius: 8px;
+  }
+  .col-body.drag-over .col-empty { display: none; }
+
+  /* ============ SIDEPANEL ============ */
+  .board-dim {
+    position: fixed; top: 48px; left: 460px; right: 0; bottom: 0;
+    background: rgba(9,11,16,0.04); z-index: 35;
+    opacity: 0; pointer-events: none; transition: opacity .18s;
+  }
+  .board-dim.show { opacity: 1; pointer-events: auto; }
+
+  .panel {
+    position: fixed; top: 48px; left: 0; bottom: 0;
+    width: 460px;
+    background: var(--surface);
+    border-right: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-panel);
+    transform: translateX(-100%);
+    transition: transform 180ms cubic-bezier(0.2,0,0,1);
+    z-index: 40;
+    display: flex; flex-direction: column;
+  }
+  .panel.open { transform: translateX(0); }
+
+  .panel-scroll { flex: 1; overflow-y: auto; padding: 20px 24px 12px; }
+  .panel-scroll::-webkit-scrollbar { width: 8px; }
+  .panel-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+  .panel-head { border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+  .panel-head-row { display: flex; align-items: center; justify-content: space-between; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600;
+    padding: 4px 11px; border-radius: 6px; border: none;
+    cursor: pointer; text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .status-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .panel-close {
+    width: 24px; height: 24px; border-radius: 6px; border: none;
+    background: transparent; color: var(--muted);
+    display: grid; place-items: center; font-size: 18px; line-height: 1;
+  }
+  .panel-close:hover { background: var(--surface-hover); color: var(--text); }
+
+  .panel-name {
+    font-size: 22px; font-weight: 660; letter-spacing: -0.015em;
+    margin-top: 12px; cursor: text; padding: 2px 4px; border-radius: 4px;
+    border: 1px solid transparent;
+  }
+  .panel-name:hover { background: var(--surface-hover); }
+  .panel-sub { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+  .panel-city { font-size: 14px; color: var(--muted); cursor: text; }
+  .panel-prio { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text); cursor: pointer; border: none; background: transparent; padding: 2px 4px; border-radius: 4px; }
+  .panel-prio:hover { background: var(--surface-hover); }
+  .panel-overdue-tag {
+    display: inline-flex; align-items: center; gap: 4px; margin-top: 10px;
+    font-size: 11.5px; font-weight: 600; color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--surface));
+    border-radius: 6px; padding: 3px 8px;
+  }
+
+  .fields { margin-top: 18px; display: grid; grid-template-columns: 116px 1fr; row-gap: 2px; align-items: center; }
+  .f-label {
+    font-size: 11.5px; font-weight: 550; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--muted); height: 38px; display: flex; align-items: center;
+  }
+  .f-value {
+    font-size: 15px; font-weight: 450; color: var(--text);
+    height: 38px; display: flex; align-items: center;
+    padding: 0 8px; border-radius: 5px; cursor: text;
+    border: 1px solid transparent; min-width: 0;
+  }
+  .f-value:hover { background: var(--surface-hover); }
+  .f-value.link a { color: var(--accent); text-decoration: none; }
+  .f-value.mono { font-variant-numeric: tabular-nums; }
+  .f-value input, .f-value select {
+    width: 100%; border: none; background: transparent; font-size: 15px;
+    outline: none; padding: 0;
+  }
+  .f-value .avatar { margin-right: 7px; }
+  .group-sep { grid-column: 1 / 3; height: 1px; background: var(--border); margin: 8px 0; }
+
+  .pill-soft {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 6px;
+  }
+
+  .activity-head {
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--muted);
+    border-top: 1px solid var(--border); margin-top: 24px; padding-top: 16px;
+  }
+  .feed { margin-top: 12px; position: relative; }
+  .feed::before {
+    content: ""; position: absolute; left: 8px; top: 4px; bottom: 4px;
+    width: 1px; background: var(--border);
+  }
+  .feed-item { position: relative; padding: 0 0 16px 30px; }
+  .feed-item:last-child { padding-bottom: 0; }
+  .feed-dot {
+    position: absolute; left: 5px; top: 4px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted-2); border: 2px solid var(--surface);
+    box-sizing: content-box; margin-left: -2px; margin-top: -2px;
+  }
+  .feed-top { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+  .feed-user { font-size: 11px; font-weight: 600; }
+  .feed-meta { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .feed-text { font-size: 14px; line-height: 1.5; color: var(--text); }
+  .feed-text.comment {
+    background: var(--surface-hover); border-radius: 8px; padding: 8px 10px;
+    margin-top: 2px;
+  }
+  .feed-text.rule { color: var(--muted); font-style: italic; }
+
+  .composer-wrap {
+    border-top: 1px solid var(--border);
+    padding: 12px 24px; background: var(--surface);
+    display: flex; gap: 8px; align-items: flex-end;
+  }
+  .composer {
+    flex: 1; resize: none; border: none; outline: none;
+    background: var(--surface-hover); border-radius: 8px;
+    padding: 9px 12px; font-size: 13px; line-height: 1.4;
+    max-height: 96px; min-height: 38px;
+  }
+  .composer::placeholder { color: var(--muted-2); }
+  .composer-send {
+    width: 32px; height: 32px; border-radius: 8px; border: none;
+    background: var(--accent); color: #fff; display: none; place-items: center;
+    flex-shrink: 0;
+  }
+  .composer-send.show { display: grid; }
+  .composer-send:hover { background: var(--accent-hover); }
+
+  /* ============ MENÜ ============ */
+  .menu {
+    position: fixed; z-index: 70;
+    background: var(--surface); border: 1px solid var(--border-strong);
+    border-radius: 10px; box-shadow: 0 8px 24px rgba(9,11,16,0.16);
+    padding: 4px; min-width: 190px;
+  }
+  .menu-sep { height: 1px; background: var(--border); margin: 4px 2px; }
+  .menu-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; border-radius: 6px; font-size: 12.5px;
+    cursor: pointer; color: var(--text);
+  }
+  .menu-item:hover { background: var(--surface-hover); }
+  .menu-item.danger { color: var(--danger); }
+  .menu-item .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .menu-item .check { margin-left: auto; color: var(--accent); }
+  .swatch { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+  .swatch-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; padding: 4px; }
+  .swatch-cell { width: 26px; height: 26px; border-radius: 6px; cursor: pointer; border: 2px solid transparent; }
+  .swatch-cell:hover { border-color: var(--border-strong); }
+  .swatch-cell.sel { border-color: var(--text); }
+
+  /* ============ OVERLAYS (cmdk + rules) ============ */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(9,11,16,0.28); z-index: 60;
+    display: none; align-items: flex-start; justify-content: center; padding-top: 12vh;
+  }
+  .overlay.show { display: flex; }
+
+  .cmdk {
+    width: 560px; max-width: 90vw; background: var(--surface);
+    border: 1px solid var(--border-strong); border-radius: 12px;
+    box-shadow: 0 16px 48px rgba(9,11,16,0.22); overflow: hidden;
+  }
+  .cmdk-input {
+    width: 100%; height: 48px; border: none; outline: none;
+    padding: 0 18px; font-size: 15px; background: transparent;
+    border-bottom: 1px solid var(--border);
+  }
+  .cmdk-results { max-height: 320px; overflow-y: auto; padding: 6px; }
+  .cmdk-row {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+    border-radius: 8px; cursor: pointer; font-size: 13px;
+  }
+  .cmdk-row.sel { background: var(--surface-hover); }
+  .cmdk-row .sub { color: var(--muted); font-size: 12px; margin-left: auto; }
+  .cmdk-empty { padding: 18px; color: var(--muted); font-size: 13px; text-align: center; }
+
+  /* Regeln-Modal */
+  .modal {
+    width: 600px; max-width: 92vw; max-height: 76vh; background: var(--surface);
+    border: 1px solid var(--border-strong); border-radius: 14px;
+    box-shadow: 0 16px 48px rgba(9,11,16,0.22); overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .modal-head {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-title { font-size: 15px; font-weight: 640; }
+  .modal-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .modal-body { padding: 14px 20px; overflow-y: auto; }
+  .rule-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+    margin-bottom: 8px; background: var(--surface);
+  }
+  .rule-row.off { opacity: 0.55; }
+  .rule-text { flex: 1; font-size: 13px; line-height: 1.4; }
+  .rule-text b { font-weight: 640; }
+  .rule-del {
+    width: 26px; height: 26px; border-radius: 6px; border: none; background: transparent;
+    color: var(--muted); font-size: 16px; display: grid; place-items: center;
+  }
+  .rule-del:hover { background: var(--surface-hover); color: var(--danger); }
+  .switch { position: relative; width: 34px; height: 20px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .track {
+    position: absolute; inset: 0; background: var(--border-strong); border-radius: 999px;
+    transition: background .15s; cursor: pointer;
+  }
+  .switch .track::before {
+    content: ""; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px;
+    background: #fff; border-radius: 50%; transition: transform .15s;
+  }
+  .switch input:checked + .track { background: var(--accent); }
+  .switch input:checked + .track::before { transform: translateX(14px); }
+
+  .rule-form {
+    border: 1px dashed var(--border-strong); border-radius: 10px; padding: 12px;
+    margin-top: 8px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .rule-form-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+  .rule-form-line label { color: var(--muted); font-size: 12px; }
+  .rf-input, .rf-select {
+    height: 32px; border: 1px solid var(--border-strong); border-radius: 7px;
+    background: var(--surface); padding: 0 8px; font-size: 13px; outline: none;
+  }
+  .rf-input:focus, .rf-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
+  .rf-num { width: 60px; text-align: center; }
+  .modal-foot { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  .btn-primary { height: 34px; border: none; background: var(--accent); color: #fff; border-radius: 8px; padding: 0 16px; font-size: 13px; font-weight: 600; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-sub { height: 34px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); border-radius: 8px; padding: 0 14px; font-size: 13px; }
+  .btn-sub:hover { background: var(--surface-hover); }
+
+  .kbd {
+    font-size: 10px; font-weight: 500; background: var(--surface-hover);
+    border: 1px solid var(--border); border-radius: 3px; padding: 1px 4px;
+    color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+
+  :where(button, .f-value, .cmdk-row, .menu-item, .status-pill, .panel-prio, .panel-name, .panel-city):focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 6px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="brand">Flipper Vertrieb Board</span>
+  <span class="save-status" id="saveStatus">Alle Änderungen gespeichert</span>
+  <span class="spacer"></span>
+  <div class="search-wrap">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input class="search" id="search" placeholder="Suchen… ⌘K" />
+  </div>
+  <button class="btn-ghost" id="btnImport" title="Daten aus ClickUp-Export importieren">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+    Import
+  </button>
+  <input type="file" id="importFile" accept=".json,application/json" style="display:none" />
+  <button class="btn-ghost" id="btnRules" title="Automatik-Regeln">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+    Regeln <span class="badge" id="rulesBadge" style="display:none">0</span>
+  </button>
+  <button class="btn-new" id="btnNew">+ Neues Bad</button>
+  <div class="me avatar md" id="meAvatar" title=""></div>
+</div>
+
+<div class="board" id="board"></div>
+
+<div class="board-dim" id="boardDim"></div>
+
+<aside class="panel" id="panel">
+  <div class="panel-scroll" id="panelScroll"></div>
+  <div class="composer-wrap" id="composerWrap" style="display:none;">
+    <textarea class="composer" id="composer" rows="1" placeholder="Kommentar… (⌘+Enter)"></textarea>
+    <button class="composer-send" id="composerSend" title="Senden">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+    </button>
+  </div>
+</aside>
+
+<div class="overlay" id="cmdkOverlay">
+  <div class="cmdk">
+    <input class="cmdk-input" id="cmdkInput" placeholder="Suchen nach Bad, Stadt, Ansprechpartner…" />
+    <div class="cmdk-results" id="cmdkResults"></div>
+  </div>
+</div>
+
+<div class="overlay" id="rulesOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Automatik-Regeln</div>
+        <div class="modal-sub">Laufen beim Öffnen des Boards und alle 60 Sekunden, solange das Board offen ist.</div>
+      </div>
+      <button class="panel-close" id="rulesClose">×</button>
+    </div>
+    <div class="modal-body" id="rulesBody"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============ KONSTANTEN ============ */
+const STORAGE_KEY = "flipper_vb_v1";
+const SCHEMA_VERSION = 2;
+
+// Farb-Swatches: Spalten werden über diese Palette eingefärbt (Recolor = Swatch wählen).
+const SWATCHES = [
+  { dot:"#8A8F98", pillBg:"#ECEDEF", pillText:"#5A5F68" }, // grau
+  { dot:"#5B8DEF", pillBg:"#EAF1FE", pillText:"#1D5FD4" }, // blau
+  { dot:"#7C6FE0", pillBg:"#EDEBF7", pillText:"#5E4FB8" }, // violett
+  { dot:"#E0A030", pillBg:"#FBF1E0", pillText:"#A8761E" }, // bernstein
+  { dot:"#EAB308", pillBg:"#FBF6DD", pillText:"#8A6D08" }, // gelb
+  { dot:"#2A9D8F", pillBg:"#E3F4F1", pillText:"#1F7468" }, // teal
+  { dot:"#6366F1", pillBg:"#EAEBFE", pillText:"#4044C4" }, // indigo
+  { dot:"#C45D8A", pillBg:"#FBEAF1", pillText:"#A23E6C" }, // pink
+  { dot:"#D0606A", pillBg:"#FBE9EA", pillText:"#B0444C" }, // rot
+  { dot:"#3FB37F", pillBg:"#E2F6EE", pillText:"#2C7C53" }, // grün
+  { dot:"#B0444C", pillBg:"#F7E3E4", pillText:"#8E3138" }, // dunkelrot
+  { dot:"#64748B", pillBg:"#ECEEF1", pillText:"#475569" }, // schiefer
+];
+function swatch(i) { return SWATCHES[((i % SWATCHES.length) + SWATCHES.length) % SWATCHES.length]; }
+
+function defaultColumns() {
+  const def = [
+    ["neu", "Neu", 0, false],
+    ["nummer_falsch", "Nummer falsch", 8, false],
+    ["in_bearbeitung", "In Bearbeitung", 2, false],
+    ["anrufen", "Anrufen", 3, false],
+    ["spaeter_anrufen", "Später anrufen", 4, false],
+    ["nicht_erreicht", "Nicht erreicht – nächstes Jahr", 11, false],
+    ["follow_up_mail", "Follow-Up-Mail", 5, false],
+    ["kaltakquise_mail", "Kaltakquise-Mail", 1, false],
+    ["besichtigung_mail", "Besichtigungstermin-Mail", 6, false],
+    ["vertrag_unterschrieben", "Vertrag unterschrieben", 9, true],
+    ["abgelehnt", "Abgelehnt", 10, true],
+  ];
+  return def.map(([id, label, sw, final]) => {
+    const s = swatch(sw);
+    return { id, label, dot: s.dot, pillBg: s.pillBg, pillText: s.pillText, final };
+  });
+}
+
+// Mapping alter (v1) Status-IDs auf das neue Spaltenset.
+const V1_STATUS_MAP = {
+  neu: "neu", kontaktiert: "in_bearbeitung", termin: "anrufen",
+  angebot: "follow_up_mail", gewonnen: "vertrag_unterschrieben", verloren: "abgelehnt",
+};
+
+const PRIOS = {
+  dringend: { label: "Dringend", color: "#D0606A", bars: 3 },
+  hoch:     { label: "Hoch",     color: "#E0A030", bars: 3 },
+  mittel:   { label: "Mittel",   color: "#5B8DEF", bars: 2 },
+  niedrig:  { label: "Niedrig",  color: "#B4B8BF", bars: 1 },
+};
+const PRIO_ORDER = ["dringend","hoch","mittel","niedrig"];
+
+const AVATAR_PALETTE = ["#2A9D8F","#5B8DEF","#7C6FE0","#E0A030","#C45D8A","#6B8E5A"];
+
+/* ============ HELPERS ============ */
+function uid(p) { return (p||"b") + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c])); }
+function todayStr() { const d = new Date(); return d.toISOString().slice(0,10); }
+function daysUntil(iso) {
+  if (!iso) return null;
+  const t = new Date(); t.setHours(0,0,0,0);
+  const d = new Date(iso + "T00:00:00"); if (isNaN(d)) return null;
+  return Math.round((d - t) / 86400000);
+}
+function avatarColor(name) {
+  if (!name) return AVATAR_PALETTE[0];
+  let sum = 0; for (let i = 0; i < name.length; i++) sum += name.charCodeAt(i);
+  return AVATAR_PALETTE[sum % AVATAR_PALETTE.length];
+}
+function initials(name) {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+function fmtDateShort(iso) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return d && m ? `${d}.${m}` : iso;
+}
+function relTime(iso) {
+  const dt = new Date(iso); if (isNaN(dt)) return "";
+  const time = dt.toTimeString().slice(0, 5);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const day = new Date(dt); day.setHours(0,0,0,0);
+  const diffDays = Math.round((today - day) / 86400000);
+  const dd = String(dt.getDate()).padStart(2, "0");
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  if (diffDays === 0) return `Heute ${time}`;
+  if (diffDays === 1) return `Gestern ${time}`;
+  return `${dd}.${mm}. ${time}`;
+}
+
+/* ============ STATE ============ */
+let state = null;
+let openId = null;
+let kbdFocus = { col: 0, idx: 0 };
+
+function colById(id) { return state.columns.find(c => c.id === id); }
+function isOverdue(b) {
+  if (!b.datum) return false;
+  const col = colById(b.status);
+  if (col && col.final) return false;
+  const d = daysUntil(b.datum);
+  return d !== null && d <= 0;
+}
+
+function defaultRules() {
+  return [
+    {
+      id: uid("r"), name: "Überfällige Karten anrufen", enabled: false,
+      trigger: { type: "deadline", innerhalbTage: 0 },
+      action: { type: "move", columnId: "anrufen" },
+    },
+  ];
+}
+
+function defaultSeed() {
+  const user = "Jonas Berg";
+  function act(u, typ, inhalt, offMin) {
+    const d = new Date(Date.now() - offMin * 60000);
+    return { user: u, datum: d.toISOString().slice(0,10), uhrzeit: d.toISOString(), typ, inhalt };
+  }
+  const baeder = [
+    { id: uid(), badname:"Stadtbad Witten", stadt:"Witten", status:"neu", prioritaet:"hoch",
+      datum:"2026-06-28", verantwortlicher:"Jonas Berg",
+      ansprechpartner:"Markus Lehmann", kontaktPosition:"Bäderleiter", telefon:"+49 2302 581200", email:"lehmann@stadtwerke-witten.de",
+      kategorie:"Hallenbad", position:0,
+      activity:[ act("Jonas Berg","kommentar","Lead aus Messe-Kontakt. Vorabinfo per Mail geschickt.",120) ] },
+
+    { id: uid(), badname:"Freibad Annen", stadt:"Witten", status:"neu", prioritaet:"mittel",
+      datum:"2026-07-02", verantwortlicher:"Lisa Hoffmann",
+      ansprechpartner:"Petra Voss", kontaktPosition:"Geschäftsführung", telefon:"+49 2302 449871", email:"voss@annen-baeder.de",
+      kategorie:"Freibad", position:1,
+      activity:[ act("Lisa Hoffmann","kommentar","Saisonbetrieb — erst ab August erreichbar.",300) ] },
+
+    { id: uid(), badname:"Aquarena Gütersloh", stadt:"Gütersloh", status:"in_bearbeitung", prioritaet:"dringend",
+      datum:"2026-06-23", verantwortlicher:"Jonas Berg",
+      ansprechpartner:"Daniel Krieger", kontaktPosition:"Schwimmmeister", telefon:"+49 5241 822330", email:"d.krieger@aquarena-gt.de",
+      kategorie:"Spaßbad", position:0,
+      activity:[ act("Jonas Berg","kommentar","Erstgespräch geführt. Interesse am Kursprogramm.",600) ] },
+
+    { id: uid(), badname:"Hallenbad Herne-Mitte", stadt:"Herne", status:"anrufen", prioritaet:"mittel",
+      datum:"2026-06-24", verantwortlicher:"Lisa Hoffmann",
+      ansprechpartner:"Sandra Bauer", kontaktPosition:"Verwaltung", telefon:"+49 2323 167540", email:"bauer@herne-baeder.de",
+      kategorie:"Hallenbad", position:0,
+      activity:[ act("Lisa Hoffmann","status","änderte Status Neu → Anrufen",1400) ] },
+
+    { id: uid(), badname:"Westfalenbad Hagen", stadt:"Hagen", status:"anrufen", prioritaet:"hoch",
+      datum:"2026-07-04", verantwortlicher:"Jonas Berg",
+      ansprechpartner:"Thomas Reuter", kontaktPosition:"Betriebsleiter", telefon:"+49 2331 207780", email:"reuter@westfalenbad.de",
+      kategorie:"Spaßbad", position:1,
+      activity:[ act("Jonas Berg","kommentar","Rückruf für nächste Woche vereinbart.",1800) ] },
+
+    { id: uid(), badname:"Solebad Werne", stadt:"Werne", status:"follow_up_mail", prioritaet:"dringend",
+      datum:"2026-06-22", verantwortlicher:"Lisa Hoffmann",
+      ansprechpartner:"Andrea Klein", kontaktPosition:"Marketing", telefon:"+49 2389 535010", email:"klein@solebad-werne.de",
+      kategorie:"Solebad", position:0,
+      activity:[ act("Lisa Hoffmann","kommentar","Follow-Up-Mail nach Erstgespräch versendet.",2400) ] },
+
+    { id: uid(), badname:"Nordbad Dortmund", stadt:"Dortmund", status:"besichtigung_mail", prioritaet:"hoch",
+      datum:"2026-06-30", verantwortlicher:"Jonas Berg",
+      ansprechpartner:"Frank Wolff", kontaktPosition:"Vorstand", telefon:"+49 231 5021990", email:"wolff@sportwelt-do.de",
+      kategorie:"Hallenbad", position:0,
+      activity:[ act("Jonas Berg","kommentar","Terminvorschlag für Besichtigung per Mail geschickt.",1500) ] },
+
+    { id: uid(), badname:"Maritimo Oer-Erkenschwick", stadt:"Oer-Erkenschwick", status:"vertrag_unterschrieben", prioritaet:"mittel",
+      datum:"2026-06-20", verantwortlicher:"Lisa Hoffmann",
+      ansprechpartner:"Julia Schmitt", kontaktPosition:"Geschäftsführung", telefon:"+49 2368 690040", email:"schmitt@maritimo.de",
+      kategorie:"Spaßbad", position:0,
+      activity:[ act("Lisa Hoffmann","kommentar","Vertrag unterschrieben! Kursstart September.",4800) ] },
+
+    { id: uid(), badname:"Hallenbad Castrop", stadt:"Castrop-Rauxel", status:"nummer_falsch", prioritaet:"niedrig",
+      datum:"", verantwortlicher:"Jonas Berg",
+      ansprechpartner:"Robert Mai", kontaktPosition:"", telefon:"+49 2305 110290", email:"",
+      kategorie:"Freibad", position:0,
+      activity:[ act("Jonas Berg","kommentar","Nummer nicht vergeben — neue Kontaktdaten recherchieren.",6900) ] },
+  ];
+  return { schemaVersion: SCHEMA_VERSION, aktuellerBenutzer: user, columns: defaultColumns(), rules: defaultRules(), baeder };
+}
+
+function emptyBoard() {
+  return { schemaVersion: SCHEMA_VERSION, aktuellerBenutzer: "Jonas Berg", columns: defaultColumns(), rules: defaultRules(), baeder: [] };
+}
+
+// Normalisierung/Migration — für lokal geladene UND aus der Cloud geladene States.
+function normalize(parsed) {
+  if (!parsed || !Array.isArray(parsed.baeder)) return defaultSeed();
+  // Migration v1 -> v2: Spalten in den State holen, alte Status-IDs remappen.
+  if (!Array.isArray(parsed.columns) || parsed.columns.length === 0) {
+    parsed.columns = defaultColumns();
+    const valid0 = new Set(parsed.columns.map(c => c.id));
+    parsed.baeder.forEach(b => {
+      const mapped = V1_STATUS_MAP[b.status] || b.status;
+      b.status = valid0.has(mapped) ? mapped : parsed.columns[0].id;
+    });
+  }
+  if (!Array.isArray(parsed.rules)) parsed.rules = [];
+  if (!parsed.aktuellerBenutzer) parsed.aktuellerBenutzer = "Jonas Berg";
+  parsed.schemaVersion = SCHEMA_VERSION;
+  const valid = new Set(parsed.columns.map(c => c.id));
+  parsed.baeder.forEach(b => {
+    if (!Array.isArray(b.activity)) b.activity = [];
+    if (typeof b.position !== "number") b.position = 0;
+    if (typeof b.kontaktPosition !== "string") b.kontaktPosition = "";
+    if (!valid.has(b.status)) b.status = parsed.columns[0].id;
+  });
+  return parsed;
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultSeed();
+    return normalize(JSON.parse(raw));
+  } catch (e) {
+    return defaultSeed();
+  }
+}
+
+// remoteAvailable: läuft die App hinter dem Server (Cloud) oder als lose Datei (nur lokal)?
+let remoteAvailable = false;
+let remoteOK = true;
+
+async function fetchRemoteState() {
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    if (!r.ok) return undefined;          // Server da, aber Fehler
+    remoteAvailable = true;
+    return await r.json();                // State-Objekt ODER null (leere DB)
+  } catch (e) {
+    return undefined;                     // kein Server (file://) / offline
+  }
+}
+async function pushRemote() {
+  if (!remoteAvailable) return false;
+  try {
+    const r = await fetch("/api/state", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(state),
+    });
+    remoteOK = r.ok;
+    return r.ok;
+  } catch (e) { remoteOK = false; return false; }
+}
+
+let saveTimer = null;
+function save() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+    const ok = await pushRemote();
+    flashSaved(ok);
+  }, 150);
+}
+function flashSaved(cloudOK) {
+  const el = document.getElementById("saveStatus");
+  el.textContent = remoteAvailable ? (cloudOK ? "Gespeichert ✓ (Cloud)" : "⚠ Offline – nur lokal gespeichert")
+                                   : "Gespeichert ✓ (lokal)";
+  el.classList.add("flash");
+  setTimeout(() => {
+    el.textContent = remoteAvailable ? (remoteOK ? "Mit Cloud synchronisiert" : "⚠ Offline – Änderungen lokal")
+                                     : "Lokal gespeichert";
+    el.classList.remove("flash");
+  }, 1200);
+}
+
+/* ============ ACTIVITY ============ */
+function pushActivity(bad, typ, inhalt) {
+  const now = new Date();
+  bad.activity.push({
+    user: state.aktuellerBenutzer,
+    datum: now.toISOString().slice(0,10),
+    uhrzeit: now.toISOString(),
+    typ, inhalt,
+  });
+}
+
+/* ============ RENDER: BOARD ============ */
+function badById(id) { return state.baeder.find(b => b.id === id); }
+function colBaeder(colId) {
+  return state.baeder.filter(b => b.status === colId).sort((a, b) => a.position - b.position);
+}
+
+function prioIconHTML(prio) {
+  const p = PRIOS[prio] || PRIOS.niedrig;
+  const heights = ["b1","b2","b3"];
+  let html = '<span class="prio-icon" title="' + p.label + '">';
+  for (let i = 0; i < 3; i++) {
+    const active = i < p.bars;
+    html += `<span class="${heights[i]}" style="background:${active ? p.color : "var(--muted-2)"};opacity:${active ? 1 : 0.4}"></span>`;
+  }
+  return html + "</span>";
+}
+
+function cardHTML(b) {
+  const col = colById(b.status);
+  const av = avatarColor(b.verantwortlicher);
+  const overdue = isOverdue(b);
+  const telIcon = b.telefon ? `<span class="meta" title="${esc(b.telefon)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>` : "";
+  const dateHTML = b.datum
+    ? `<span class="meta ${overdue ? "due-over" : ""}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>${fmtDateShort(b.datum)}${overdue ? " ⚠" : ""}</span>`
+    : "";
+  return `
+  <div class="card ${overdue ? "overdue" : ""}" draggable="true" data-id="${b.id}" style="--status-color:${col ? col.dot : "var(--muted)"}">
+    <div class="card-row1">
+      ${prioIconHTML(b.prioritaet)}
+      <span class="card-title">${esc(b.badname) || "Unbenannt"}</span>
+      <span class="avatar sm" style="background:${av}" title="${esc(b.verantwortlicher)}">${esc(initials(b.verantwortlicher))}</span>
+    </div>
+    <div class="card-row2">
+      <span class="card-city">${esc(b.stadt)}</span>
+      ${b.kategorie ? `<span class="pill-cat">${esc(b.kategorie)}</span>` : ""}
+    </div>
+    ${(dateHTML || telIcon) ? `<div class="card-row3">${dateHTML}${telIcon}</div>` : ""}
+  </div>`;
+}
+
+function columnHTML(col) {
+  const items = colBaeder(col.id);
+  return `
+  <div class="column" data-col="${col.id}" style="--col:${col.dot}">
+    <div class="col-head" data-colhead="${col.id}" draggable="true">
+      <span class="col-chip" style="background:${col.pillBg};color:${col.pillText}">
+        <span class="col-dot" style="background:${col.dot}"></span>
+        <span class="col-title" data-coltitle="${col.id}" title="Klicken zum Umbenennen">${esc(col.label)}</span>
+        <span class="col-count">${items.length}</span>
+      </span>
+      ${col.final ? `<span class="col-final-tag" title="Endspalte: kein Deadline-Alarm, keine Automatik">Ende</span>` : ""}
+      <span class="col-actions">
+        <button class="col-btn" data-addcol="${col.id}" title="Neues Bad hier">+</button>
+        <button class="col-btn" data-colmenu="${col.id}" title="Spalte bearbeiten">⋯</button>
+      </span>
+    </div>
+    <div class="col-body" data-body="${col.id}">
+      ${items.length ? items.map(cardHTML).join("") : `<div class="col-empty">Keine Bäder</div>`}
+    </div>
+  </div>`;
+}
+
+function renderBoard() {
+  const board = document.getElementById("board");
+  board.innerHTML = state.columns.map(columnHTML).join("")
+    + `<button class="col-add-ghost" id="addColumn" title="Spalte hinzufügen">+</button>`;
+  wireBoardEvents();
+  applyKbdFocus();
+  updateRulesBadge();
+}
+
+/* ============ DRAG & DROP ============ */
+let dragType = null;          // 'card' | 'column'
+let dragId = null;            // Karten-ID
+let dragColId = null;         // Spalten-ID
+
+function wireBoardEvents() {
+  // --- Karten ---
+  document.querySelectorAll(".card").forEach(card => {
+    card.addEventListener("click", () => openPanel(card.dataset.id));
+    card.addEventListener("dragstart", e => {
+      e.stopPropagation();
+      dragType = "card"; dragId = card.dataset.id;
+      card.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setData("text/plain", dragId); } catch (_) {}
+    });
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+      dragType = null; dragId = null;
+      document.querySelectorAll(".col-body").forEach(b => b.classList.remove("drag-over"));
+      document.querySelectorAll(".col-body").forEach(b => b.style.background = "");
+      document.querySelectorAll(".card-placeholder").forEach(p => p.remove());
+    });
+  });
+
+  // --- Spalte als Drop-Zone (für Karten) + Reorder-Ziel (für Spalten) ---
+  document.querySelectorAll(".column").forEach(column => {
+    const colId = column.dataset.col;
+    const body = column.querySelector(".col-body");
+    const tint = (colById(colId) || {}).dot || "var(--muted)";
+
+    column.addEventListener("dragover", e => {
+      if (dragType === "card") {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        body.classList.add("drag-over");
+        body.style.background = `color-mix(in srgb, ${tint} 9%, transparent)`;
+        showPlaceholder(body, e.clientY);
+      } else if (dragType === "column" && dragColId && dragColId !== colId) {
+        e.preventDefault();
+        column.classList.add("drag-target");
+      }
+    });
+    column.addEventListener("dragleave", e => {
+      if (!column.contains(e.relatedTarget)) {
+        body.classList.remove("drag-over");
+        body.style.background = "";
+        column.classList.remove("drag-target");
+        const ph = body.querySelector(".card-placeholder");
+        if (ph) ph.remove();
+      }
+    });
+    column.addEventListener("drop", e => {
+      if (dragType === "card") {
+        e.preventDefault();
+        body.classList.remove("drag-over");
+        body.style.background = "";
+        const ph = body.querySelector(".card-placeholder");
+        const kids = Array.from(body.children).filter(c =>
+          (c.classList.contains("card") && !c.classList.contains("dragging")) || c === ph);
+        const dropIndex = ph ? kids.indexOf(ph) : null;
+        if (ph) ph.remove();
+        handleCardDrop(colId, dropIndex);
+      } else if (dragType === "column" && dragColId) {
+        e.preventDefault();
+        column.classList.remove("drag-target");
+        reorderColumn(dragColId, colId, e.clientX, column);
+      }
+    });
+
+    // --- Spaltenkopf: Drag zum Sortieren ---
+    const head = column.querySelector(".col-head");
+    head.addEventListener("dragstart", e => {
+      // Nicht starten, wenn man gerade ein Inline-Input bedient.
+      if (e.target.classList.contains("col-title-input")) { e.preventDefault(); return; }
+      dragType = "column"; dragColId = colId;
+      column.classList.add("col-dragging");
+      e.dataTransfer.effectAllowed = "move";
+    });
+    head.addEventListener("dragend", () => {
+      column.classList.remove("col-dragging");
+      document.querySelectorAll(".column.drag-target").forEach(c => c.classList.remove("drag-target"));
+      dragType = null; dragColId = null;
+    });
+  });
+
+  // Spalten-Buttons
+  document.querySelectorAll("[data-addcol]").forEach(btn => {
+    btn.addEventListener("click", e => { e.stopPropagation(); createBad(btn.dataset.addcol); });
+  });
+  document.querySelectorAll("[data-colmenu]").forEach(btn => {
+    btn.addEventListener("click", e => { e.stopPropagation(); openColumnMenu(btn, colById(btn.dataset.colmenu)); });
+  });
+  document.querySelectorAll("[data-coltitle]").forEach(el => {
+    el.addEventListener("click", e => { e.stopPropagation(); renameColumnInline(el, colById(el.dataset.coltitle)); });
+  });
+  const addCol = document.getElementById("addColumn");
+  if (addCol) addCol.addEventListener("click", createColumn);
+}
+
+function showPlaceholder(body, clientY) {
+  let ph = body.querySelector(".card-placeholder");
+  if (!ph) { ph = document.createElement("div"); ph.className = "card-placeholder"; ph.style.height = "52px"; }
+  const cards = Array.from(body.querySelectorAll(".card:not(.dragging)"));
+  let inserted = false;
+  for (const card of cards) {
+    const rect = card.getBoundingClientRect();
+    if (clientY < rect.top + rect.height / 2) { body.insertBefore(ph, card); inserted = true; break; }
+  }
+  if (!inserted) body.appendChild(ph);
+}
+
+function handleCardDrop(newCol, dropIndex) {
+  if (!dragId) return;
+  const bad = badById(dragId);
+  if (!bad) return;
+  const oldCol = bad.status;
+  const targetItems = colBaeder(newCol).filter(b => b.id !== dragId);
+  let idx = (dropIndex == null) ? targetItems.length : Math.min(dropIndex, targetItems.length);
+  targetItems.splice(idx, 0, bad);
+  targetItems.forEach((b, i) => { b.position = i; });
+  if (oldCol !== newCol) {
+    bad.status = newCol;
+    pushActivity(bad, "status", `änderte Status ${labelOf(oldCol)} → ${labelOf(newCol)}`);
+    colBaeder(oldCol).forEach((b, i) => { b.position = i; });
+  }
+  save(); renderBoard();
+  if (openId === bad.id) renderPanel();
+}
+
+function reorderColumn(fromId, toId, clientX, toEl) {
+  if (fromId === toId) return;
+  const cols = state.columns;
+  const fromIdx = cols.findIndex(c => c.id === fromId);
+  let toIdx = cols.findIndex(c => c.id === toId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  const rect = toEl.getBoundingClientRect();
+  const after = clientX > rect.left + rect.width / 2;
+  const [moved] = cols.splice(fromIdx, 1);
+  toIdx = cols.findIndex(c => c.id === toId);
+  cols.splice(after ? toIdx + 1 : toIdx, 0, moved);
+  save(); renderBoard();
+}
+
+function labelOf(colId) { const c = colById(colId); return c ? c.label : colId; }
+
+/* ============ SPALTEN-VERWALTUNG ============ */
+function createColumn() {
+  const used = new Set(state.columns.map((_, i) => i));
+  const sw = swatch(state.columns.length);
+  const col = { id: uid("c"), label: "Neue Spalte", dot: sw.dot, pillBg: sw.pillBg, pillText: sw.pillText, final: false };
+  state.columns.push(col);
+  save(); renderBoard();
+  // Direkt in den Umbenennen-Modus.
+  setTimeout(() => {
+    const el = document.querySelector(`[data-coltitle="${col.id}"]`);
+    if (el) el.click();
+    el && el.scrollIntoView({ inline: "end", block: "nearest" });
+  }, 30);
+}
+
+function renameColumnInline(el, col) {
+  if (!col) return;
+  const cur = col.label;
+  const chip = el.closest(".col-chip");
+  el.outerHTML = `<input class="col-title-input" type="text" value="${esc(cur)}" />`;
+  const input = chip.querySelector(".col-title-input");
+  input.focus(); input.select();
+  let done = false;
+  const finish = (commit) => {
+    if (done) return; done = true;
+    const v = input.value.trim();
+    if (commit && v && v !== col.label) { col.label = v; save(); }
+    renderBoard();
+  };
+  input.onblur = () => setTimeout(() => finish(true), 0);
+  input.onkeydown = e => {
+    if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+  };
+}
+
+function openColumnMenu(anchor, col) {
+  if (!col) return;
+  const html = `
+    <div class="menu-item" data-action="rename"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Umbenennen</div>
+    <div class="menu-item" data-action="color"><span class="swatch" style="background:${col.dot}"></span> Farbe ändern</div>
+    <div class="menu-item" data-action="final">${col.final ? "✓ " : ""}Als Endspalte ${col.final ? "entfernen" : "markieren"}<span class="check">${col.final ? "✓" : ""}</span></div>
+    <div class="menu-sep"></div>
+    <div class="menu-item danger" data-action="delete"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg> Spalte löschen</div>`;
+  showRawMenu(anchor, html, action => {
+    if (action === "rename") { const el = document.querySelector(`[data-coltitle="${col.id}"]`); if (el) el.click(); }
+    else if (action === "color") { const el = document.querySelector(`[data-colmenu="${col.id}"]`); openColorMenu(el || anchor, col); }
+    else if (action === "final") { col.final = !col.final; save(); renderBoard(); if (openId) renderPanel(); }
+    else if (action === "delete") { deleteColumn(col); }
+  });
+}
+
+function openColorMenu(anchor, col) {
+  const cells = SWATCHES.map((s, i) =>
+    `<div class="swatch-cell ${s.dot === col.dot ? "sel" : ""}" data-sw="${i}" style="background:${s.dot}"></div>`
+  ).join("");
+  const html = `<div class="swatch-grid">${cells}</div>`;
+  showRawMenu(anchor, html, null, menu => {
+    menu.querySelectorAll(".swatch-cell").forEach(cell => {
+      cell.onclick = () => {
+        const s = swatch(parseInt(cell.dataset.sw));
+        col.dot = s.dot; col.pillBg = s.pillBg; col.pillText = s.pillText;
+        save(); renderBoard(); if (openId) renderPanel(); closeMenu();
+      };
+    });
+  });
+}
+
+function deleteColumn(col) {
+  if (state.columns.length <= 1) { alert("Die letzte Spalte kann nicht gelöscht werden."); return; }
+  const count = colBaeder(col.id).length;
+  const fallback = state.columns.find(c => c.id !== col.id);
+  const msg = count > 0
+    ? `Spalte „${col.label}" löschen?\n${count} Bad/Bäder werden nach „${fallback.label}" verschoben.`
+    : `Spalte „${col.label}" löschen?`;
+  if (!confirm(msg)) return;
+  // Karten nicht verlieren: in die erste verbliebene Spalte verschieben.
+  colBaeder(col.id).forEach(b => {
+    b.status = fallback.id;
+    b.position = colBaeder(fallback.id).length;
+    pushActivity(b, "status", `Spalte gelöscht → verschoben nach ${fallback.label}`);
+  });
+  // Regeln aufräumen, die auf die gelöschte Spalte zeigen.
+  state.rules = state.rules.filter(r => !(r.action.type === "move" && r.action.columnId === col.id));
+  state.columns = state.columns.filter(c => c.id !== col.id);
+  if (openId && !badById(openId)) closePanel();
+  save(); renderBoard(); if (openId) renderPanel();
+}
+
+/* ============ SIDEPANEL ============ */
+function openPanel(id) {
+  openId = id;
+  document.getElementById("panel").classList.add("open");
+  document.getElementById("boardDim").classList.add("show");
+  document.getElementById("composerWrap").style.display = "flex";
+  renderPanel(); markActiveCard();
+}
+function closePanel() {
+  openId = null;
+  document.getElementById("panel").classList.remove("open");
+  document.getElementById("boardDim").classList.remove("show");
+  closeMenu();
+  document.querySelectorAll(".card.active").forEach(c => c.classList.remove("active"));
+}
+function markActiveCard() {
+  document.querySelectorAll(".card.active").forEach(c => c.classList.remove("active"));
+  if (openId) { const c = document.querySelector(`.card[data-id="${openId}"]`); if (c) c.classList.add("active"); }
+}
+
+function fieldRow(label, valueHTML, attrs = "", extraClass = "") {
+  return `<div class="f-label">${label}</div><div class="f-value${extraClass ? " " + extraClass : ""}" ${attrs}>${valueHTML}</div>`;
+}
+
+function renderPanel() {
+  const b = badById(openId);
+  if (!b) { closePanel(); return; }
+  const col = colById(b.status) || { label: "—", dot: "#8A8F98", pillBg: "#ECEDEF", pillText: "#5A5F68" };
+  const prio = PRIOS[b.prioritaet] || PRIOS.niedrig;
+  const av = avatarColor(b.verantwortlicher);
+  const overdue = isOverdue(b);
+  const dleft = b.datum ? daysUntil(b.datum) : null;
+  const overdueTag = overdue
+    ? `<div class="panel-overdue-tag">⚠ Deadline ${dleft === 0 ? "heute fällig" : `seit ${Math.abs(dleft)} Tag(en) überfällig`}</div>` : "";
+
+  const stamm = `
+    <div class="fields">
+      ${fieldRow("Priorität", `<span class="pill-soft" style="background:${prio.color}1A;color:${prio.color}">${prio.label}</span>`, `data-edit="prioritaet"`)}
+      ${fieldRow("Verantw.", `<span class="avatar xs" style="background:${av}">${esc(initials(b.verantwortlicher))}</span>${esc(b.verantwortlicher) || "—"}`, `data-edit="verantwortlicher"`)}
+      ${fieldRow("Kategorie", `<span class="pill-cat">${esc(b.kategorie) || "—"}</span>`, `data-edit="kategorie"`)}
+      <div class="group-sep"></div>
+      ${fieldRow("Deadline", `${esc(b.datum) || "—"}${overdue ? ' <span style="color:var(--danger);font-weight:600;margin-left:6px">überfällig</span>' : ""}`, `data-edit="datum"`)}
+      <div class="group-sep"></div>
+      ${fieldRow("Kontakt", esc(b.ansprechpartner) || "—", `data-edit="ansprechpartner"`)}
+      ${fieldRow("Position", esc(b.kontaktPosition) || "—", `data-edit="kontaktPosition"`)}
+      ${fieldRow("Telefon", b.telefon ? `<a href="tel:${esc(b.telefon)}">${esc(b.telefon)}</a>` : "—", `data-edit="telefon"`, "mono link")}
+      ${fieldRow("E-Mail", b.email ? `<a href="mailto:${esc(b.email)}">${esc(b.email)}</a>` : "—", `data-edit="email"`, "link")}
+    </div>`;
+
+  const feed = b.activity.slice().sort((a, c) => new Date(c.uhrzeit) - new Date(a.uhrzeit)).map(a => {
+    const aav = avatarColor(a.user);
+    const dotColor = a.typ === "status" ? statusDotFromInhalt(a.inhalt) : (a.typ === "regel" ? "var(--accent)" : "var(--muted-2)");
+    const cls = a.typ === "kommentar" ? "comment" : (a.typ === "regel" ? "rule" : "");
+    return `
+      <div class="feed-item">
+        <span class="feed-dot" style="background:${dotColor}"></span>
+        <div class="feed-top">
+          <span class="avatar xs" style="background:${aav}">${esc(initials(a.user))}</span>
+          <span class="feed-user">${esc(a.user)}</span>
+          <span class="feed-meta">${relTime(a.uhrzeit)}</span>
+        </div>
+        <div class="feed-text ${cls}">${esc(a.inhalt)}</div>
+      </div>`;
+  }).join("");
+
+  document.getElementById("panelScroll").innerHTML = `
+    <div class="panel-head">
+      <div class="panel-head-row">
+        <button class="status-pill" id="statusPill" style="background:${col.pillBg};color:${col.pillText}">
+          <span class="dot" style="background:${col.dot}"></span>${esc(col.label)}
+        </button>
+        <button class="panel-close" id="panelClose" title="Schließen (Esc)">×</button>
+      </div>
+      <div class="panel-name" id="panelName" title="Klicken zum Bearbeiten">${esc(b.badname) || "Unbenannt"}</div>
+      <div class="panel-sub">
+        <span class="panel-city" id="panelCity" title="Klicken zum Bearbeiten">${esc(b.stadt) || "Stadt hinzufügen"}</span>
+        <button class="panel-prio" id="panelPrio">${prioIconHTML(b.prioritaet)} ${prio.label}</button>
+      </div>
+      ${overdueTag}
+    </div>
+    ${stamm}
+    <div class="activity-head">Verlauf</div>
+    <div class="feed">${feed || '<div style="color:var(--muted);font-size:13px;padding:8px 0;">Noch keine Aktivität.</div>'}</div>
+  `;
+  wirePanelEvents(b);
+}
+
+function statusDotFromInhalt(inhalt) {
+  for (const c of state.columns) { if (inhalt.includes("→ " + c.label)) return c.dot; }
+  return "var(--muted-2)";
+}
+
+function wirePanelEvents(b) {
+  document.getElementById("panelClose").onclick = closePanel;
+  document.getElementById("statusPill").onclick = e => openStatusMenu(e.currentTarget, b);
+  document.getElementById("panelPrio").onclick = e => openPrioMenu(e.currentTarget, b);
+  document.getElementById("panelName").onclick = e => inlineEditText(e.currentTarget, b, "badname", "Badname");
+  document.getElementById("panelCity").onclick = e => inlineEditText(e.currentTarget, b, "stadt", "Stadt");
+
+  document.querySelectorAll("#panelScroll .f-value[data-edit]").forEach(el => {
+    const field = el.dataset.edit;
+    el.onclick = ev => {
+      if (ev.target.tagName === "A") return;
+      if (field === "prioritaet") { openPrioMenu(el, b); return; }
+      startFieldEdit(el, b, field);
+    };
+  });
+}
+
+const FIELD_LABELS = {
+  badname: "Badname", stadt: "Stadt", datum: "Deadline",
+  verantwortlicher: "Verantwortlicher", ansprechpartner: "Ansprechpartner",
+  kontaktPosition: "Position", telefon: "Telefon", email: "E-Mail",
+  kategorie: "Kategorie", prioritaet: "Priorität",
+};
+
+function commitField(b, field, newVal) {
+  const old = b[field] || "";
+  if (newVal === old) return false;
+  if (field === "verantwortlicher") pushActivity(b, "zuweisung", `wies ${newVal || "niemanden"} zu`);
+  else pushActivity(b, "bearbeitung", `änderte ${FIELD_LABELS[field] || field}`);
+  b[field] = newVal;
+  save(); renderBoard(); markActiveCard();
+  return true;
+}
+
+function startFieldEdit(el, b, field) {
+  const type = field === "datum" ? "date" : "text";
+  const cur = b[field] || "";
+  el.innerHTML = `<input type="${type}" value="${esc(cur)}" />`;
+  const input = el.querySelector("input");
+  input.focus(); if (type === "text") input.select();
+  let done = false;
+  const finish = (commit) => { if (done) return; done = true; if (commit) commitField(b, field, input.value.trim()); renderPanel(); };
+  input.onblur = () => setTimeout(() => finish(true), 0);
+  input.onkeydown = e => {
+    if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+  };
+}
+
+function inlineEditText(el, b, field, label) {
+  const cur = b[field] || "";
+  el.innerHTML = `<input type="text" value="${esc(cur)}" style="width:100%;border:none;background:transparent;font-size:inherit;font-weight:inherit;outline:none;color:inherit;" placeholder="${label}" />`;
+  const input = el.querySelector("input");
+  input.focus(); input.select();
+  let done = false;
+  const finish = (commit) => { if (done) return; done = true; if (commit) commitField(b, field, input.value.trim()); renderPanel(); };
+  input.onblur = () => setTimeout(() => finish(true), 0);
+  input.onkeydown = e => {
+    if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+  };
+}
+
+/* ============ MENÜS ============ */
+let menuEl = null;
+function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; document.removeEventListener("mousedown", onMenuOutside); } }
+function onMenuOutside(e) { if (menuEl && !menuEl.contains(e.target)) closeMenu(); }
+function placeMenu(anchor) {
+  const r = anchor.getBoundingClientRect();
+  const m = menuEl.getBoundingClientRect();
+  let left = Math.max(8, Math.min(r.left, window.innerWidth - m.width - 8));
+  let top = r.bottom + 6;
+  if (top + m.height > window.innerHeight - 8) {
+    const above = r.top - m.height - 6;
+    top = above >= 8 ? above : Math.max(8, window.innerHeight - m.height - 8);
+  }
+  menuEl.style.top = top + "px"; menuEl.style.left = left + "px";
+}
+// Wert-Menü (data-val) – für Status & Priorität.
+function showMenu(anchor, html, onPick) {
+  closeMenu();
+  menuEl = document.createElement("div"); menuEl.className = "menu"; menuEl.innerHTML = html;
+  document.body.appendChild(menuEl); placeMenu(anchor);
+  menuEl.querySelectorAll(".menu-item").forEach(mi => { mi.onclick = () => { onPick(mi.dataset.val); closeMenu(); }; });
+  setTimeout(() => document.addEventListener("mousedown", onMenuOutside), 0);
+}
+// Roh-Menü mit data-action ODER eigenem Wiring (Spalten, Farben).
+function showRawMenu(anchor, html, onAction, wire) {
+  closeMenu();
+  menuEl = document.createElement("div"); menuEl.className = "menu"; menuEl.innerHTML = html;
+  document.body.appendChild(menuEl); placeMenu(anchor);
+  if (onAction) menuEl.querySelectorAll(".menu-item").forEach(mi => { mi.onclick = () => { const a = mi.dataset.action; closeMenu(); onAction(a); }; });
+  if (wire) wire(menuEl);
+  setTimeout(() => document.addEventListener("mousedown", onMenuOutside), 0);
+}
+
+function openStatusMenu(anchor, b) {
+  const html = state.columns.map(c =>
+    `<div class="menu-item" data-val="${c.id}"><span class="dot" style="background:${c.dot}"></span>${esc(c.label)}</div>`
+  ).join("");
+  showMenu(anchor, html, val => {
+    if (val === b.status) return;
+    const old = b.status;
+    b.status = val; b.position = colBaeder(val).filter(x => x.id !== b.id).length;
+    pushActivity(b, "status", `änderte Status ${labelOf(old)} → ${labelOf(val)}`);
+    save(); renderBoard(); renderPanel(); markActiveCard();
+  });
+}
+function openPrioMenu(anchor, b) {
+  const html = PRIO_ORDER.map(k => {
+    const p = PRIOS[k];
+    return `<div class="menu-item" data-val="${k}">${prioIconHTML(k)} <span style="margin-left:4px">${p.label}</span></div>`;
+  }).join("");
+  showMenu(anchor, html, val => {
+    if (val === b.prioritaet) return;
+    b.prioritaet = val; pushActivity(b, "bearbeitung", `änderte Priorität`);
+    save(); renderBoard(); renderPanel(); markActiveCard();
+  });
+}
+
+/* ============ COMPOSER ============ */
+const composer = document.getElementById("composer");
+const composerSend = document.getElementById("composerSend");
+function autoGrow() {
+  composer.style.height = "auto";
+  composer.style.height = Math.min(composer.scrollHeight, 96) + "px";
+  composerSend.classList.toggle("show", composer.value.trim().length > 0);
+}
+composer.addEventListener("input", autoGrow);
+composer.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); sendComment(); }
+});
+composerSend.addEventListener("click", sendComment);
+function sendComment() {
+  const b = badById(openId); if (!b) return;
+  const text = composer.value.trim(); if (!text) return;
+  pushActivity(b, "kommentar", text);
+  composer.value = ""; autoGrow(); save(); renderPanel();
+}
+
+/* ============ NEUES BAD ============ */
+function createBad(colId) {
+  const target = colById(colId) ? colId : state.columns[0].id;
+  const bad = {
+    id: uid(), badname: "", stadt: "", status: target, prioritaet: "mittel",
+    datum: todayStr(),
+    verantwortlicher: state.aktuellerBenutzer, ansprechpartner: "", kontaktPosition: "", telefon: "", email: "",
+    kategorie: "", position: colBaeder(target).length, activity: [],
+  };
+  pushActivity(bad, "bearbeitung", "erstellte das Bad");
+  state.baeder.push(bad);
+  save(); renderBoard(); openPanel(bad.id);
+  setTimeout(() => { const n = document.getElementById("panelName"); if (n) n.click(); }, 60);
+}
+
+/* ============ AUTOMATIK-REGELN ============ */
+function ruleMatches(rule, b) {
+  if (rule.trigger.type !== "deadline") return false;
+  const col = colById(b.status);
+  if (col && col.final) return false;       // Endspalten sind tabu
+  if (!b.datum) return false;
+  const d = daysUntil(b.datum);
+  if (d === null) return false;
+  return d <= (rule.trigger.innerhalbTage || 0);
+}
+function applyRule(rule, b) {
+  if (rule.action.type === "move") {
+    if (!colById(rule.action.columnId)) return false;
+    if (b.status === rule.action.columnId) return false;
+    const old = b.status;
+    b.status = rule.action.columnId;
+    b.position = colBaeder(rule.action.columnId).filter(x => x.id !== b.id).length;
+    pushActivity(b, "regel", `Regel „${rule.name}": ${labelOf(old)} → ${labelOf(rule.action.columnId)}`);
+    return true;
+  }
+  if (rule.action.type === "prio") {
+    if (b.prioritaet === rule.action.prioritaet) return false;
+    b.prioritaet = rule.action.prioritaet;
+    pushActivity(b, "regel", `Regel „${rule.name}": Priorität → ${(PRIOS[rule.action.prioritaet]||{}).label || rule.action.prioritaet}`);
+    return true;
+  }
+  return false;
+}
+function runRules() {
+  let changed = 0;
+  (state.rules || []).filter(r => r.enabled).forEach(rule => {
+    // Kopie der Liste, da applyRule den Status ändert.
+    state.baeder.slice().forEach(b => { if (ruleMatches(rule, b) && applyRule(rule, b)) changed++; });
+  });
+  if (changed > 0) { save(); renderBoard(); if (openId) renderPanel(); }
+  return changed;
+}
+
+function ruleSummary(r) {
+  const within = r.trigger.innerhalbTage || 0;
+  const when = within === 0 ? "<b>fällig/überfällig</b>" : `fällig <b>in ≤ ${within} Tagen</b>`;
+  let act;
+  if (r.action.type === "move") act = `verschiebe nach <b>${esc(labelOf(r.action.columnId))}</b>`;
+  else act = `setze Priorität auf <b>${(PRIOS[r.action.prioritaet]||{}).label || r.action.prioritaet}</b>`;
+  return `Wenn Deadline ${when}, ${act}.`;
+}
+function updateRulesBadge() {
+  const n = (state.rules || []).filter(r => r.enabled).length;
+  const badge = document.getElementById("rulesBadge");
+  badge.textContent = n; badge.style.display = n > 0 ? "inline-block" : "none";
+}
+
+const rulesOverlay = document.getElementById("rulesOverlay");
+function openRules() { rulesOverlay.classList.add("show"); renderRules(); }
+function closeRules() { rulesOverlay.classList.remove("show"); }
+
+function renderRules() {
+  const body = document.getElementById("rulesBody");
+  const rules = state.rules || [];
+  const list = rules.map(r => `
+    <div class="rule-row ${r.enabled ? "" : "off"}">
+      <label class="switch"><input type="checkbox" data-toggle="${r.id}" ${r.enabled ? "checked" : ""}><span class="track"></span></label>
+      <div class="rule-text"><b>${esc(r.name)}</b><br>${ruleSummary(r)}</div>
+      <button class="rule-del" data-del="${r.id}" title="Regel löschen">×</button>
+    </div>`).join("") || `<div style="color:var(--muted);font-size:13px;padding:6px 2px 12px;">Noch keine Regeln.</div>`;
+
+  const colOpts = state.columns.map(c => `<option value="${c.id}">${esc(c.label)}</option>`).join("");
+  const prioOpts = PRIO_ORDER.map(k => `<option value="${k}">${PRIOS[k].label}</option>`).join("");
+
+  body.innerHTML = `
+    ${list}
+    <div class="rule-form" id="ruleForm">
+      <div class="rule-form-line">
+        <label>Name</label>
+        <input class="rf-input" id="rfName" type="text" placeholder="z.B. Überfällige anrufen" style="flex:1;min-width:160px">
+      </div>
+      <div class="rule-form-line">
+        <label>Wenn Deadline fällig in ≤</label>
+        <input class="rf-input rf-num" id="rfDays" type="number" value="0" min="0">
+        <label>Tagen</label>
+      </div>
+      <div class="rule-form-line">
+        <label>dann</label>
+        <select class="rf-select" id="rfAction">
+          <option value="move">verschiebe nach Spalte</option>
+          <option value="prio">setze Priorität</option>
+        </select>
+        <select class="rf-select" id="rfCol">${colOpts}</select>
+        <select class="rf-select" id="rfPrio" style="display:none">${prioOpts}</select>
+      </div>
+      <div style="display:flex;justify-content:flex-end">
+        <button class="btn-primary" id="rfAdd">+ Regel hinzufügen</button>
+      </div>
+    </div>
+  `;
+
+  body.querySelectorAll("[data-toggle]").forEach(cb => {
+    cb.onchange = () => { const r = rules.find(x => x.id === cb.dataset.toggle); if (r) { r.enabled = cb.checked; save(); updateRulesBadge(); renderRules(); if (r.enabled) runRules(); } };
+  });
+  body.querySelectorAll("[data-del]").forEach(btn => {
+    btn.onclick = () => { state.rules = rules.filter(x => x.id !== btn.dataset.del); save(); updateRulesBadge(); renderRules(); };
+  });
+  const actionSel = document.getElementById("rfAction");
+  actionSel.onchange = () => {
+    document.getElementById("rfCol").style.display = actionSel.value === "move" ? "" : "none";
+    document.getElementById("rfPrio").style.display = actionSel.value === "prio" ? "" : "none";
+  };
+  document.getElementById("rfAdd").onclick = () => {
+    const name = document.getElementById("rfName").value.trim() || "Neue Regel";
+    const days = Math.max(0, parseInt(document.getElementById("rfDays").value) || 0);
+    const atype = actionSel.value;
+    const rule = {
+      id: uid("r"), name, enabled: true,
+      trigger: { type: "deadline", innerhalbTage: days },
+      action: atype === "move"
+        ? { type: "move", columnId: document.getElementById("rfCol").value }
+        : { type: "prio", prioritaet: document.getElementById("rfPrio").value },
+    };
+    state.rules.push(rule); save(); updateRulesBadge(); renderRules(); runRules();
+  };
+}
+
+/* ============ COMMAND PALETTE / SUCHE ============ */
+const cmdkOverlay = document.getElementById("cmdkOverlay");
+const cmdkInput = document.getElementById("cmdkInput");
+const cmdkResults = document.getElementById("cmdkResults");
+let cmdkSel = 0, cmdkMatches = [];
+
+function openCmdk(prefill) { cmdkOverlay.classList.add("show"); cmdkInput.value = prefill || ""; cmdkInput.focus(); renderCmdk(); }
+function closeCmdk() { cmdkOverlay.classList.remove("show"); }
+function renderCmdk() {
+  const q = cmdkInput.value.trim().toLowerCase();
+  cmdkMatches = state.baeder.filter(b => !q || (b.badname + " " + b.stadt + " " + b.ansprechpartner).toLowerCase().includes(q)).slice(0, 30);
+  cmdkSel = 0;
+  if (cmdkMatches.length === 0) { cmdkResults.innerHTML = `<div class="cmdk-empty">Kein Treffer für „${esc(q)}"</div>`; return; }
+  cmdkResults.innerHTML = cmdkMatches.map((b, i) => {
+    const col = colById(b.status) || { dot: "#8A8F98", label: "—" };
+    return `<div class="cmdk-row ${i === 0 ? "sel" : ""}" data-i="${i}">
+      <span class="col-dot" style="background:${col.dot};width:8px;height:8px;border-radius:50%"></span>
+      <span>${esc(b.badname) || "Unbenannt"}</span>
+      <span class="sub">${esc(b.stadt)} · ${esc(col.label)}</span>
+    </div>`;
+  }).join("");
+  cmdkResults.querySelectorAll(".cmdk-row").forEach(r => { r.onclick = () => pickCmdk(parseInt(r.dataset.i)); });
+}
+function pickCmdk(i) { const b = cmdkMatches[i]; if (!b) return; closeCmdk(); openPanel(b.id); }
+cmdkInput.addEventListener("input", renderCmdk);
+cmdkInput.addEventListener("keydown", e => {
+  if (e.key === "ArrowDown") { e.preventDefault(); moveCmdk(1); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); moveCmdk(-1); }
+  else if (e.key === "Enter") { e.preventDefault(); pickCmdk(cmdkSel); }
+  else if (e.key === "Escape") { e.preventDefault(); closeCmdk(); }
+});
+function moveCmdk(d) {
+  const rows = cmdkResults.querySelectorAll(".cmdk-row"); if (!rows.length) return;
+  rows[cmdkSel] && rows[cmdkSel].classList.remove("sel");
+  cmdkSel = (cmdkSel + d + rows.length) % rows.length;
+  rows[cmdkSel].classList.add("sel"); rows[cmdkSel].scrollIntoView({ block: "nearest" });
+}
+cmdkOverlay.addEventListener("mousedown", e => { if (e.target === cmdkOverlay) closeCmdk(); });
+rulesOverlay.addEventListener("mousedown", e => { if (e.target === rulesOverlay) closeRules(); });
+document.getElementById("rulesClose").addEventListener("click", closeRules);
+document.getElementById("btnRules").addEventListener("click", openRules);
+document.getElementById("search").addEventListener("focus", function () { this.blur(); openCmdk(""); });
+
+/* ============ TASTATUR-NAVIGATION ============ */
+function visibleCols() { return state.columns.map(c => colBaeder(c.id)); }
+function applyKbdFocus() {
+  document.querySelectorAll(".card.kbd-focus").forEach(c => c.classList.remove("kbd-focus"));
+  const cols = visibleCols();
+  kbdFocus.col = Math.max(0, Math.min(kbdFocus.col, cols.length - 1));
+  if (!cols[kbdFocus.col]) return;
+  kbdFocus.idx = Math.max(0, Math.min(kbdFocus.idx, cols[kbdFocus.col].length - 1));
+  const bad = cols[kbdFocus.col][kbdFocus.idx]; if (!bad) return;
+  const el = document.querySelector(`.card[data-id="${bad.id}"]`);
+  if (el) {
+    el.classList.add("kbd-focus");
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: reduce ? "auto" : "smooth" });
+  }
+}
+function focusedBad() { const cols = visibleCols(); return cols[kbdFocus.col] && cols[kbdFocus.col][kbdFocus.idx]; }
+
+document.addEventListener("keydown", e => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+  if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); openCmdk(""); return; }
+  if (e.key === "Escape") {
+    if (cmdkOverlay.classList.contains("show")) { closeCmdk(); return; }
+    if (rulesOverlay.classList.contains("show")) { closeRules(); return; }
+    if (menuEl) { closeMenu(); return; }
+    if (openId) { closePanel(); return; }
+  }
+  if (typing) return;
+  if (cmdkOverlay.classList.contains("show") || rulesOverlay.classList.contains("show")) return;
+  if (openId) return;
+
+  const cols = visibleCols();
+  if (e.key === "c" || e.key === "C") { e.preventDefault(); createBad(state.columns[0].id); return; }
+  if (e.key === "j" || e.key === "J") { e.preventDefault(); kbdFocus.idx = Math.min(kbdFocus.idx + 1, Math.max(0, (cols[kbdFocus.col] || []).length - 1)); applyKbdFocus(); return; }
+  if (e.key === "k" || e.key === "K") { e.preventDefault(); kbdFocus.idx = Math.max(0, kbdFocus.idx - 1); applyKbdFocus(); return; }
+  if (e.key === "ArrowRight") { e.preventDefault(); kbdFocus.col = Math.min(state.columns.length - 1, kbdFocus.col + 1); kbdFocus.idx = 0; applyKbdFocus(); return; }
+  if (e.key === "ArrowLeft") { e.preventDefault(); kbdFocus.col = Math.max(0, kbdFocus.col - 1); kbdFocus.idx = 0; applyKbdFocus(); return; }
+  if (e.key === "Enter") { const b = focusedBad(); if (b) { e.preventDefault(); openPanel(b.id); } return; }
+  if (/^[1-9]$/.test(e.key)) {
+    const b = focusedBad(); const target = state.columns[parseInt(e.key) - 1];
+    if (b && target && b.status !== target.id) {
+      e.preventDefault();
+      const old = b.status;
+      b.status = target.id; b.position = colBaeder(target.id).filter(x => x.id !== b.id).length;
+      pushActivity(b, "status", `änderte Status ${labelOf(old)} → ${labelOf(target.id)}`);
+      save(); renderBoard(); if (openId === b.id) renderPanel();
+    }
+    return;
+  }
+});
+
+/* ============ IMPORT (ClickUp-Export) ============ */
+function mergeImport(data, replace) {
+  if (!data || !Array.isArray(data.baeder)) { alert("Ungültige Import-Datei."); return; }
+  if (replace) {
+    // Sauberer Start: bestehende Bäder + Spalten verwerfen, ClickUp-Set übernehmen.
+    state.baeder = []; state.columns = [];
+    if (openId) closePanel();
+  }
+  // Spalten zusammenführen: gleicher Label/ID -> bestehende Spalte nutzen, sonst neu anlegen.
+  const colMap = {};
+  (data.columns || []).forEach(imp => {
+    const byLabel = state.columns.find(c => c.label.toLowerCase() === String(imp.label || "").toLowerCase());
+    const byId = state.columns.find(c => c.id === imp.id);
+    if (byLabel) { colMap[imp.id] = byLabel.id; return; }
+    if (byId) { colMap[imp.id] = byId.id; return; }
+    let newId = imp.id || uid("c");
+    if (state.columns.some(c => c.id === newId)) newId = newId + "_" + Math.random().toString(36).slice(2, 5);
+    const sw = swatch(state.columns.length);
+    state.columns.push({
+      id: newId, label: imp.label || "Importiert",
+      dot: imp.dot || sw.dot, pillBg: imp.pillBg || sw.pillBg, pillText: imp.pillText || sw.pillText,
+      final: !!imp.final,
+    });
+    colMap[imp.id] = newId;
+  });
+
+  const existingExt = new Set(state.baeder.map(b => b.extId).filter(Boolean));
+  let added = 0, skipped = 0;
+  data.baeder.forEach(imp => {
+    if (imp.extId && existingExt.has(imp.extId)) { skipped++; return; }
+    const status = colMap[imp.status] || (colById(imp.status) ? imp.status : state.columns[0].id);
+    state.baeder.push({
+      id: uid(), extId: imp.extId || null,
+      badname: imp.badname || "Unbenannt", stadt: imp.stadt || "",
+      status, prioritaet: PRIOS[imp.prioritaet] ? imp.prioritaet : "mittel",
+      datum: imp.datum || "",
+      verantwortlicher: imp.verantwortlicher || "",
+      ansprechpartner: imp.ansprechpartner || "", kontaktPosition: imp.kontaktPosition || "",
+      telefon: imp.telefon || "", email: imp.email || "", kategorie: imp.kategorie || "",
+      position: colBaeder(status).length,
+      activity: Array.isArray(imp.activity) ? imp.activity : [],
+    });
+    if (imp.extId) existingExt.add(imp.extId);
+    added++;
+  });
+
+  save(); renderBoard();
+  alert(`Import abgeschlossen:\n${added} Bäder importiert${skipped ? `, ${skipped} Dubletten übersprungen` : ""}.`);
+}
+
+const importFile = document.getElementById("importFile");
+document.getElementById("btnImport").addEventListener("click", () => importFile.click());
+importFile.addEventListener("change", () => {
+  const file = importFile.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data; try { data = JSON.parse(reader.result); } catch (e) { alert("Datei ist kein gültiges JSON."); return; }
+    const n = Array.isArray(data.baeder) ? data.baeder.length : 0;
+    if (!confirm(`${n} Bäder aus „${data.list || data.source || "Export"}" importieren?`)) { importFile.value = ""; return; }
+    let replace = false;
+    if (state.baeder.length > 0) {
+      // OK = sauberer Start (bestehende ersetzen), Abbrechen = nur hinzufügen.
+      replace = confirm("Bestehende Bäder und Spalten zuerst ENTFERNEN (sauberer Start)?\n\nOK = ersetzen   ·   Abbrechen = nur hinzufügen");
+    }
+    mergeImport(data, replace);
+    importFile.value = "";
+  };
+  reader.readAsText(file);
+});
+
+/* ============ TOPBAR / GLOBAL ============ */
+document.getElementById("btnNew").addEventListener("click", () => createBad(state.columns[0].id));
+document.getElementById("boardDim").addEventListener("click", closePanel);
+
+function renderMe() {
+  const me = document.getElementById("meAvatar");
+  me.style.background = avatarColor(state.aktuellerBenutzer);
+  me.textContent = initials(state.aktuellerBenutzer);
+  me.title = state.aktuellerBenutzer;
+}
+
+/* ============ DEBUG-HOOK ============ */
+window.__vb = {
+  getState: () => state,
+  save: () => { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); },
+  runRules: () => runRules(),
+  reset: () => { localStorage.removeItem(STORAGE_KEY); state = defaultSeed(); save(); renderMe(); renderBoard(); closePanel(); },
+};
+
+/* ============ INIT ============ */
+async function init() {
+  state = loadState();                 // sofort aus Cache/Seed rendern
+  renderMe(); runRules(); renderBoard();
+
+  const remote = await fetchRemoteState();
+  if (remote && Array.isArray(remote.baeder)) {
+    // Cloud ist die Quelle der Wahrheit.
+    state = normalize(remote);
+    if (openId && !badById(openId)) closePanel();
+    renderMe(); runRules(); renderBoard(); if (openId) renderPanel();
+  } else if (remote === null) {
+    // Server da, DB leer → sauberes leeres Board anlegen und hochladen.
+    state = emptyBoard();
+    renderMe(); renderBoard();
+    pushRemote();
+  }
+  // remote === undefined → kein Server (lose Datei): bleibt beim lokalen State.
+
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  flashSaved(remoteOK);
+  setInterval(runRules, 60000);
+}
+init();
+</script>
+</body>
+</html>
