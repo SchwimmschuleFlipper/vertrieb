@@ -593,7 +593,7 @@
     <div class="modal-head">
       <div>
         <div class="modal-title">Automatik-Regeln</div>
-        <div class="modal-sub">Verschieben Karten nach Verweildauer in einer Spalte. Laufen beim Öffnen des Boards und alle 60 Sekunden, solange es offen ist. Endspalten sind ausgenommen.</div>
+        <div class="modal-sub">Verschieben Karten anhand der Deadline (X Tage danach), optional nur in einer bestimmten Spalte. Laufen beim Öffnen des Boards und alle 60 Sekunden, solange es offen ist. Endspalten sind ausgenommen.</div>
       </div>
       <button class="panel-close" id="rulesClose">×</button>
     </div>
@@ -803,8 +803,8 @@ function normalize(parsed) {
     });
   }
   if (!Array.isArray(parsed.rules)) parsed.rules = [];
-  // Alt-Regeln (Deadline-Trigger) verwerfen — neues Modell: Verweildauer pro Spalte.
-  parsed.rules = parsed.rules.filter(r => r && r.trigger && r.trigger.type === "in_column");
+  // Nur unterstützte Regeln behalten (deadline-basiert, optional auf Spalte beschränkt).
+  parsed.rules = parsed.rules.filter(r => r && r.trigger && r.trigger.type === "deadline_offset");
   if (!parsed.aktuellerBenutzer) parsed.aktuellerBenutzer = "Jonas Berg";
   parsed.schemaVersion = SCHEMA_VERSION;
   const valid = new Set(parsed.columns.map(c => c.id));
@@ -1445,14 +1445,15 @@ function createBad(colId) {
 
 /* ============ AUTOMATIK-REGELN ============ */
 function ruleMatches(rule, b) {
-  if (!rule.trigger || rule.trigger.type !== "in_column") return false;
-  if (b.status !== rule.trigger.columnId) return false;     // gilt nur in der Quell-Spalte
+  if (!rule.trigger || rule.trigger.type !== "deadline_offset") return false;
   const col = colById(b.status);
-  if (col && col.final) return false;                       // Endspalten sind tabu
-  if (!b.statusSince) return false;
-  const days = (Date.now() - new Date(b.statusSince).getTime()) / 86400000;
-  if (isNaN(days)) return false;
-  return days >= (rule.trigger.tage || 0);
+  if (col && col.final) return false;                              // Endspalten sind tabu
+  if (rule.trigger.columnId && b.status !== rule.trigger.columnId) return false; // optional auf Spalte beschränkt
+  if (!b.datum) return false;
+  const du = daysUntil(b.datum);
+  if (du === null) return false;
+  const past = -du;                                                // Tage NACH Deadline (negativ = noch davor)
+  return past >= (rule.trigger.tage || 0);
 }
 function applyRule(rule, b) {
   if (rule.action.type !== "move") return false;
@@ -1462,7 +1463,7 @@ function applyRule(rule, b) {
   b.status = rule.action.columnId;
   b.statusSince = nowISO();
   b.position = colBaeder(rule.action.columnId).filter(x => x.id !== b.id).length;
-  pushActivity(b, "regel", `Regel „${rule.name}": nach ${rule.trigger.tage} Tagen ${labelOf(old)} → ${labelOf(rule.action.columnId)}`);
+  pushActivity(b, "regel", `Regel „${rule.name}": ${rule.trigger.tage} Tage nach Deadline, ${labelOf(old)} → ${labelOf(rule.action.columnId)}`);
   return true;
 }
 function runRules() {
@@ -1477,7 +1478,8 @@ function runRules() {
 
 function ruleSummary(r) {
   const t = r.trigger.tage || 0;
-  return `Wenn eine Karte <b>${t} Tag${t === 1 ? "" : "e"}</b> in <b>${esc(labelOf(r.trigger.columnId))}</b> liegt, verschiebe sie nach <b>${esc(labelOf(r.action.columnId))}</b>.`;
+  const where = r.trigger.columnId ? ` (in <b>${esc(labelOf(r.trigger.columnId))}</b>)` : "";
+  return `Wenn eine Karte <b>${t} Tag${t === 1 ? "" : "e"}</b> über Deadline${where} ist, verschiebe sie nach <b>${esc(labelOf(r.action.columnId))}</b>.`;
 }
 function updateRulesBadge() {
   const n = (state.rules || []).filter(r => r.enabled).length;
@@ -1499,7 +1501,7 @@ function renderRules() {
       <button class="rule-del" data-del="${r.id}" title="Regel löschen">×</button>
     </div>`).join("") || `<div style="color:var(--muted);font-size:13px;padding:6px 2px 12px;">Noch keine Regeln.</div>`;
 
-  const srcOpts = state.columns.map(c => `<option value="${c.id}"${c.final ? " disabled" : ""}>${esc(c.label)}${c.final ? " (Endspalte)" : ""}</option>`).join("");
+  const srcOpts = `<option value="">Alle Spalten</option>` + state.columns.filter(c => !c.final).map(c => `<option value="${c.id}">${esc(c.label)}</option>`).join("");
   const tgtOpts = state.columns.map(c => `<option value="${c.id}">${esc(c.label)}</option>`).join("");
 
   body.innerHTML = `
@@ -1507,12 +1509,15 @@ function renderRules() {
     <div class="rule-form" id="ruleForm">
       <div class="rule-form-line">
         <label>Name</label>
-        <input class="rf-input" id="rfName" type="text" placeholder="z.B. Mail nachfassen" style="flex:1;min-width:160px">
+        <input class="rf-input" id="rfName" type="text" placeholder="z.B. Nach Deadline nachfassen" style="flex:1;min-width:160px">
       </div>
       <div class="rule-form-line">
         <label>Wenn eine Karte</label>
-        <input class="rf-input rf-num" id="rfDays" type="number" value="7" min="0">
-        <label>Tage in</label>
+        <input class="rf-input rf-num" id="rfDays" type="number" value="3" min="0">
+        <label>Tage über Deadline ist</label>
+      </div>
+      <div class="rule-form-line">
+        <label>und in</label>
         <select class="rf-select" id="rfSrc">${srcOpts}</select>
         <label>liegt,</label>
       </div>
@@ -1535,12 +1540,12 @@ function renderRules() {
   document.getElementById("rfAdd").onclick = () => {
     const name = document.getElementById("rfName").value.trim() || "Neue Regel";
     const days = Math.max(0, parseInt(document.getElementById("rfDays").value) || 0);
-    const src = document.getElementById("rfSrc").value;
+    const src = document.getElementById("rfSrc").value || null;
     const tgt = document.getElementById("rfTgt").value;
-    if (src === tgt) { alert("Quell- und Ziel-Spalte müssen unterschiedlich sein."); return; }
+    if (src && src === tgt) { alert("Quell- und Ziel-Spalte müssen unterschiedlich sein."); return; }
     const rule = {
       id: uid("r"), name, enabled: true,
-      trigger: { type: "in_column", columnId: src, tage: days },
+      trigger: { type: "deadline_offset", tage: days, columnId: src },
       action: { type: "move", columnId: tgt },
     };
     state.rules.push(rule); save(); updateRulesBadge(); renderRules(); runRules();
