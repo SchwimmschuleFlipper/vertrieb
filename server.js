@@ -46,17 +46,31 @@ function applyRules(state) {
   if (!state || !Array.isArray(state.baeder) || !Array.isArray(state.columns) || !Array.isArray(state.rules)) return 0;
   const colById = id => state.columns.find(c => c.id === id);
   const countIn = (id, exceptId) => state.baeder.filter(b => b.status === id && b.id !== exceptId).length;
+  const now0 = Date.now();
+  function triggered(rule, b) {
+    const t = rule.trigger.tage || 0;
+    if (rule.trigger.type === "in_column") {
+      if (b.status !== rule.trigger.columnId) return false;
+      if (!b.statusSince) return false;
+      const days = (now0 - new Date(b.statusSince).getTime()) / 86400000;
+      return !isNaN(days) && days >= t;
+    }
+    if (rule.trigger.type === "deadline_offset") {
+      if (rule.trigger.columnId && b.status !== rule.trigger.columnId) return false;
+      if (!b.datum) return false;
+      const du = daysUntil(b.datum);
+      return du !== null && -du >= t;                                   // -du = Tage über Deadline
+    }
+    return false;
+  }
   let changed = 0;
   state.rules
-    .filter(r => r && r.enabled && r.trigger && r.trigger.type === "deadline_offset")
+    .filter(r => r && r.enabled && r.trigger && (r.trigger.type === "deadline_offset" || r.trigger.type === "in_column"))
     .forEach(rule => {
       state.baeder.slice().forEach(b => {
         const col = colById(b.status);
         if (col && col.final) return;                                   // Endspalten ausgenommen
-        if (rule.trigger.columnId && b.status !== rule.trigger.columnId) return;
-        if (!b.datum) return;
-        const du = daysUntil(b.datum);
-        if (du === null || -du < (rule.trigger.tage || 0)) return;      // -du = Tage über Deadline
+        if (!triggered(rule, b)) return;
         const tgt = rule.action && rule.action.columnId;
         if (!tgt || !colById(tgt) || b.status === tgt) return;
         const old = b.status, now = new Date();
