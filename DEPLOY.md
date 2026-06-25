@@ -10,9 +10,9 @@ serverseitig (im Railway-Server), nie im Browser.
 
 1. Auf [supabase.com](https://supabase.com) ein Projekt anlegen.
 2. **SQL Editor** öffnen → Inhalt von `supabase-schema.sql` einfügen → **Run**.
-3. **Project Settings → API** öffnen und notieren:
+3. **Project Settings → API Keys** öffnen und notieren:
    - **Project URL**  (z. B. `https://abcd.supabase.co`)
-   - **service_role key**  (geheim! beginnt mit `eyJ…`, NICHT der anon-Key)
+   - **Secret key**  (geheim! `sb_secret_…` — NICHT der publishable/anon-Key)
 
 ## 2. Auf GitHub pushen
 

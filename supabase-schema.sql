@@ -11,6 +11,7 @@ create table if not exists board_state (
   updated_at timestamptz not null default now()
 );
 
--- Zugriff erfolgt ausschließlich über den Railway-Server (Service-Key),
--- nicht direkt aus dem Browser. RLS bleibt daher aus.
-alter table board_state disable row level security;
+-- RLS AN, aber ohne Policies: der öffentliche (publishable/anon) Key wird
+-- damit komplett ausgesperrt. Der Railway-Server nutzt den SECRET-Key
+-- (sb_secret_…), der RLS umgeht — Zugriff also nur über den Server.
+alter table board_state enable row level security;
