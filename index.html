@@ -331,6 +331,7 @@
   }
   .panel-name:hover { background: var(--surface-hover); }
   .panel-sub { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+  .panel-instatus { font-size: 12px; color: var(--muted); margin-top: 8px; }
   .panel-city { font-size: 14px; color: var(--muted); cursor: text; }
   .panel-prio { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text); cursor: pointer; border: none; background: transparent; padding: 2px 4px; border-radius: 4px; }
   .panel-prio:hover { background: var(--surface-hover); }
@@ -592,7 +593,7 @@
     <div class="modal-head">
       <div>
         <div class="modal-title">Automatik-Regeln</div>
-        <div class="modal-sub">Laufen beim Öffnen des Boards und alle 60 Sekunden, solange das Board offen ist.</div>
+        <div class="modal-sub">Verschieben Karten nach Verweildauer in einer Spalte. Laufen beim Öffnen des Boards und alle 60 Sekunden, solange es offen ist. Endspalten sind ausgenommen.</div>
       </div>
       <button class="panel-close" id="rulesClose">×</button>
     </div>
@@ -664,6 +665,8 @@ const AVATAR_PALETTE = ["#2A9D8F","#5B8DEF","#7C6FE0","#E0A030","#C45D8A","#6B8E
 function uid(p) { return (p||"b") + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c])); }
 function todayStr() { const d = new Date(); return d.toISOString().slice(0,10); }
+function nowISO() { return new Date().toISOString(); }
+function daysSince(iso) { if (!iso) return null; const ms = Date.now() - new Date(iso).getTime(); if (isNaN(ms)) return null; return Math.floor(ms / 86400000); }
 function daysUntil(iso) {
   if (!iso) return null;
   const t = new Date(); t.setHours(0,0,0,0);
@@ -714,13 +717,9 @@ function isOverdue(b) {
 }
 
 function defaultRules() {
-  return [
-    {
-      id: uid("r"), name: "Überfällige Karten anrufen", enabled: false,
-      trigger: { type: "deadline", innerhalbTage: 0 },
-      action: { type: "move", columnId: "anrufen" },
-    },
-  ];
+  // Regeln sind board-spezifisch (verweisen auf konkrete Spalten-IDs) und
+  // werden im laufenden Board angelegt, nicht vorab geseedet.
+  return [];
 }
 
 function defaultSeed() {
@@ -804,6 +803,8 @@ function normalize(parsed) {
     });
   }
   if (!Array.isArray(parsed.rules)) parsed.rules = [];
+  // Alt-Regeln (Deadline-Trigger) verwerfen — neues Modell: Verweildauer pro Spalte.
+  parsed.rules = parsed.rules.filter(r => r && r.trigger && r.trigger.type === "in_column");
   if (!parsed.aktuellerBenutzer) parsed.aktuellerBenutzer = "Jonas Berg";
   parsed.schemaVersion = SCHEMA_VERSION;
   const valid = new Set(parsed.columns.map(c => c.id));
@@ -811,6 +812,7 @@ function normalize(parsed) {
     if (!Array.isArray(b.activity)) b.activity = [];
     if (typeof b.position !== "number") b.position = 0;
     if (typeof b.kontaktPosition !== "string") b.kontaktPosition = "";
+    if (!b.statusSince) b.statusSince = nowISO();   // Verweildauer ab jetzt zählen
     if (!valid.has(b.status)) b.status = parsed.columns[0].id;
   });
   return parsed;
@@ -1077,6 +1079,7 @@ function handleCardDrop(newCol, dropIndex) {
   targetItems.forEach((b, i) => { b.position = i; });
   if (oldCol !== newCol) {
     bad.status = newCol;
+    bad.statusSince = nowISO();
     pushActivity(bad, "status", `änderte Status ${labelOf(oldCol)} → ${labelOf(newCol)}`);
     colBaeder(oldCol).forEach((b, i) => { b.position = i; });
   }
@@ -1179,6 +1182,7 @@ function deleteColumn(col) {
   // Karten nicht verlieren: in die erste verbliebene Spalte verschieben.
   colBaeder(col.id).forEach(b => {
     b.status = fallback.id;
+    b.statusSince = nowISO();
     b.position = colBaeder(fallback.id).length;
     pushActivity(b, "status", `Spalte gelöscht → verschoben nach ${fallback.label}`);
   });
@@ -1223,6 +1227,8 @@ function renderPanel() {
   const dleft = b.datum ? daysUntil(b.datum) : null;
   const overdueTag = overdue
     ? `<div class="panel-overdue-tag">⚠ Deadline ${dleft === 0 ? "heute fällig" : `seit ${Math.abs(dleft)} Tag(en) überfällig`}</div>` : "";
+  const dwell = daysSince(b.statusSince);
+  const dwellTxt = dwell === null ? "" : (dwell <= 0 ? "seit heute" : dwell === 1 ? "seit gestern" : `seit ${dwell} Tagen`);
 
   const stamm = `
     <div class="fields">
@@ -1267,6 +1273,7 @@ function renderPanel() {
         <span class="panel-city" id="panelCity" title="Klicken zum Bearbeiten">${esc(b.stadt) || "Stadt hinzufügen"}</span>
         <button class="panel-prio" id="panelPrio">${prioIconHTML(b.prioritaet)} ${prio.label}</button>
       </div>
+      ${dwell !== null ? `<div class="panel-instatus">In dieser Spalte ${dwellTxt}</div>` : ""}
       ${overdueTag}
     </div>
     ${stamm}
@@ -1384,7 +1391,7 @@ function openStatusMenu(anchor, b) {
   showMenu(anchor, html, val => {
     if (val === b.status) return;
     const old = b.status;
-    b.status = val; b.position = colBaeder(val).filter(x => x.id !== b.id).length;
+    b.status = val; b.statusSince = nowISO(); b.position = colBaeder(val).filter(x => x.id !== b.id).length;
     pushActivity(b, "status", `änderte Status ${labelOf(old)} → ${labelOf(val)}`);
     save(); renderBoard(); renderPanel(); markActiveCard();
   });
@@ -1425,7 +1432,7 @@ function sendComment() {
 function createBad(colId) {
   const target = colById(colId) ? colId : state.columns[0].id;
   const bad = {
-    id: uid(), badname: "", stadt: "", status: target, prioritaet: "mittel",
+    id: uid(), badname: "", stadt: "", status: target, statusSince: nowISO(), prioritaet: "mittel",
     datum: todayStr(),
     verantwortlicher: state.aktuellerBenutzer, ansprechpartner: "", kontaktPosition: "", telefon: "", email: "",
     kategorie: "", position: colBaeder(target).length, activity: [],
@@ -1438,31 +1445,25 @@ function createBad(colId) {
 
 /* ============ AUTOMATIK-REGELN ============ */
 function ruleMatches(rule, b) {
-  if (rule.trigger.type !== "deadline") return false;
+  if (!rule.trigger || rule.trigger.type !== "in_column") return false;
+  if (b.status !== rule.trigger.columnId) return false;     // gilt nur in der Quell-Spalte
   const col = colById(b.status);
-  if (col && col.final) return false;       // Endspalten sind tabu
-  if (!b.datum) return false;
-  const d = daysUntil(b.datum);
-  if (d === null) return false;
-  return d <= (rule.trigger.innerhalbTage || 0);
+  if (col && col.final) return false;                       // Endspalten sind tabu
+  if (!b.statusSince) return false;
+  const days = (Date.now() - new Date(b.statusSince).getTime()) / 86400000;
+  if (isNaN(days)) return false;
+  return days >= (rule.trigger.tage || 0);
 }
 function applyRule(rule, b) {
-  if (rule.action.type === "move") {
-    if (!colById(rule.action.columnId)) return false;
-    if (b.status === rule.action.columnId) return false;
-    const old = b.status;
-    b.status = rule.action.columnId;
-    b.position = colBaeder(rule.action.columnId).filter(x => x.id !== b.id).length;
-    pushActivity(b, "regel", `Regel „${rule.name}": ${labelOf(old)} → ${labelOf(rule.action.columnId)}`);
-    return true;
-  }
-  if (rule.action.type === "prio") {
-    if (b.prioritaet === rule.action.prioritaet) return false;
-    b.prioritaet = rule.action.prioritaet;
-    pushActivity(b, "regel", `Regel „${rule.name}": Priorität → ${(PRIOS[rule.action.prioritaet]||{}).label || rule.action.prioritaet}`);
-    return true;
-  }
-  return false;
+  if (rule.action.type !== "move") return false;
+  if (!colById(rule.action.columnId)) return false;
+  if (b.status === rule.action.columnId) return false;
+  const old = b.status;
+  b.status = rule.action.columnId;
+  b.statusSince = nowISO();
+  b.position = colBaeder(rule.action.columnId).filter(x => x.id !== b.id).length;
+  pushActivity(b, "regel", `Regel „${rule.name}": nach ${rule.trigger.tage} Tagen ${labelOf(old)} → ${labelOf(rule.action.columnId)}`);
+  return true;
 }
 function runRules() {
   let changed = 0;
@@ -1475,12 +1476,8 @@ function runRules() {
 }
 
 function ruleSummary(r) {
-  const within = r.trigger.innerhalbTage || 0;
-  const when = within === 0 ? "<b>fällig/überfällig</b>" : `fällig <b>in ≤ ${within} Tagen</b>`;
-  let act;
-  if (r.action.type === "move") act = `verschiebe nach <b>${esc(labelOf(r.action.columnId))}</b>`;
-  else act = `setze Priorität auf <b>${(PRIOS[r.action.prioritaet]||{}).label || r.action.prioritaet}</b>`;
-  return `Wenn Deadline ${when}, ${act}.`;
+  const t = r.trigger.tage || 0;
+  return `Wenn eine Karte <b>${t} Tag${t === 1 ? "" : "e"}</b> in <b>${esc(labelOf(r.trigger.columnId))}</b> liegt, verschiebe sie nach <b>${esc(labelOf(r.action.columnId))}</b>.`;
 }
 function updateRulesBadge() {
   const n = (state.rules || []).filter(r => r.enabled).length;
@@ -1502,29 +1499,26 @@ function renderRules() {
       <button class="rule-del" data-del="${r.id}" title="Regel löschen">×</button>
     </div>`).join("") || `<div style="color:var(--muted);font-size:13px;padding:6px 2px 12px;">Noch keine Regeln.</div>`;
 
-  const colOpts = state.columns.map(c => `<option value="${c.id}">${esc(c.label)}</option>`).join("");
-  const prioOpts = PRIO_ORDER.map(k => `<option value="${k}">${PRIOS[k].label}</option>`).join("");
+  const srcOpts = state.columns.map(c => `<option value="${c.id}"${c.final ? " disabled" : ""}>${esc(c.label)}${c.final ? " (Endspalte)" : ""}</option>`).join("");
+  const tgtOpts = state.columns.map(c => `<option value="${c.id}">${esc(c.label)}</option>`).join("");
 
   body.innerHTML = `
     ${list}
     <div class="rule-form" id="ruleForm">
       <div class="rule-form-line">
         <label>Name</label>
-        <input class="rf-input" id="rfName" type="text" placeholder="z.B. Überfällige anrufen" style="flex:1;min-width:160px">
+        <input class="rf-input" id="rfName" type="text" placeholder="z.B. Mail nachfassen" style="flex:1;min-width:160px">
       </div>
       <div class="rule-form-line">
-        <label>Wenn Deadline fällig in ≤</label>
-        <input class="rf-input rf-num" id="rfDays" type="number" value="0" min="0">
-        <label>Tagen</label>
+        <label>Wenn eine Karte</label>
+        <input class="rf-input rf-num" id="rfDays" type="number" value="7" min="0">
+        <label>Tage in</label>
+        <select class="rf-select" id="rfSrc">${srcOpts}</select>
+        <label>liegt,</label>
       </div>
       <div class="rule-form-line">
-        <label>dann</label>
-        <select class="rf-select" id="rfAction">
-          <option value="move">verschiebe nach Spalte</option>
-          <option value="prio">setze Priorität</option>
-        </select>
-        <select class="rf-select" id="rfCol">${colOpts}</select>
-        <select class="rf-select" id="rfPrio" style="display:none">${prioOpts}</select>
+        <label>verschiebe sie nach</label>
+        <select class="rf-select" id="rfTgt">${tgtOpts}</select>
       </div>
       <div style="display:flex;justify-content:flex-end">
         <button class="btn-primary" id="rfAdd">+ Regel hinzufügen</button>
@@ -1538,21 +1532,16 @@ function renderRules() {
   body.querySelectorAll("[data-del]").forEach(btn => {
     btn.onclick = () => { state.rules = rules.filter(x => x.id !== btn.dataset.del); save(); updateRulesBadge(); renderRules(); };
   });
-  const actionSel = document.getElementById("rfAction");
-  actionSel.onchange = () => {
-    document.getElementById("rfCol").style.display = actionSel.value === "move" ? "" : "none";
-    document.getElementById("rfPrio").style.display = actionSel.value === "prio" ? "" : "none";
-  };
   document.getElementById("rfAdd").onclick = () => {
     const name = document.getElementById("rfName").value.trim() || "Neue Regel";
     const days = Math.max(0, parseInt(document.getElementById("rfDays").value) || 0);
-    const atype = actionSel.value;
+    const src = document.getElementById("rfSrc").value;
+    const tgt = document.getElementById("rfTgt").value;
+    if (src === tgt) { alert("Quell- und Ziel-Spalte müssen unterschiedlich sein."); return; }
     const rule = {
       id: uid("r"), name, enabled: true,
-      trigger: { type: "deadline", innerhalbTage: days },
-      action: atype === "move"
-        ? { type: "move", columnId: document.getElementById("rfCol").value }
-        : { type: "prio", prioritaet: document.getElementById("rfPrio").value },
+      trigger: { type: "in_column", columnId: src, tage: days },
+      action: { type: "move", columnId: tgt },
     };
     state.rules.push(rule); save(); updateRulesBadge(); renderRules(); runRules();
   };
@@ -1644,7 +1633,7 @@ document.addEventListener("keydown", e => {
     if (b && target && b.status !== target.id) {
       e.preventDefault();
       const old = b.status;
-      b.status = target.id; b.position = colBaeder(target.id).filter(x => x.id !== b.id).length;
+      b.status = target.id; b.statusSince = nowISO(); b.position = colBaeder(target.id).filter(x => x.id !== b.id).length;
       pushActivity(b, "status", `änderte Status ${labelOf(old)} → ${labelOf(target.id)}`);
       save(); renderBoard(); if (openId === b.id) renderPanel();
     }
@@ -1686,7 +1675,7 @@ function mergeImport(data, replace) {
     state.baeder.push({
       id: uid(), extId: imp.extId || null,
       badname: imp.badname || "Unbenannt", stadt: imp.stadt || "",
-      status, prioritaet: PRIOS[imp.prioritaet] ? imp.prioritaet : "mittel",
+      status, statusSince: nowISO(), prioritaet: PRIOS[imp.prioritaet] ? imp.prioritaet : "mittel",
       datum: imp.datum || "",
       verantwortlicher: imp.verantwortlicher || "",
       ansprechpartner: imp.ansprechpartner || "", kontaktPosition: imp.kontaktPosition || "",
